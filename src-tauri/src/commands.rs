@@ -1,6 +1,6 @@
 use crate::{
     app_state::AppState,
-    database::{self, AppConfig, TranslationRecord},
+    database::{AppConfig, TranslationRecord},
     ocr_tasks::run_ocr_on_image_data,
     platform,
     shortcuts::register_shortcuts,
@@ -9,6 +9,29 @@ use crate::{
 use chrono;
 use tauri::{AppHandle, Manager, State};
 use tauri::Emitter;
+
+type ScreenshotImage =
+    screenshots::image::ImageBuffer<screenshots::image::Rgba<u8>, Vec<u8>>;
+
+fn screenshot_to_dynamic_image(image: &ScreenshotImage) -> Result<image::DynamicImage, String> {
+    let (width, height) = (image.width(), image.height());
+    let data = image.clone().into_vec();
+    let rgba = image::RgbaImage::from_raw(width, height, data)
+        .ok_or_else(|| "无法转换截图到图像缓冲区".to_string())?;
+    Ok(image::DynamicImage::ImageRgba8(rgba))
+}
+
+fn encode_image_to_png(image: &ScreenshotImage) -> Result<Vec<u8>, String> {
+    use image::ImageFormat;
+    use std::io::Cursor;
+
+    let dynamic_image = screenshot_to_dynamic_image(image)?;
+    let mut cursor = Cursor::new(Vec::new());
+    dynamic_image
+        .write_to(&mut cursor, ImageFormat::Png)
+        .map_err(|e| format!("图片编码失败: {}", e))?;
+    Ok(cursor.into_inner())
+}
 
 #[tauri::command]
 pub async fn translate_text(
@@ -236,21 +259,7 @@ pub async fn capture_screen() -> Result<String, String> {
     let screen = &screens[0];
     let image = screen.capture().map_err(|e| format!("截图失败: {}", e))?;
 
-    #[cfg(target_os = "windows")]
-    let buffer = image
-        .to_png(None)
-        .map_err(|e| format!("图片编码失败: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    let buffer = {
-        use screenshots::image::ImageFormat;
-        use std::io::Cursor;
-        let mut buf = Vec::new();
-        image
-            .write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-            .map_err(|e| format!("图片编码失败: {}", e))?;
-        buf
-    };
+    let buffer = encode_image_to_png(&image)?;
 
     let base64_string = base64::engine::general_purpose::STANDARD.encode(&buffer);
 
@@ -276,24 +285,7 @@ pub async fn capture_screen_area(
     let screen = &screens[0];
     let image = screen.capture().map_err(|e| format!("截图失败: {}", e))?;
 
-    #[cfg(target_os = "windows")]
-    let png_buffer = image
-        .to_png(None)
-        .map_err(|e| format!("图片编码失败: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    let png_buffer = {
-        use screenshots::image::ImageFormat;
-        use std::io::Cursor;
-        let mut buf = Vec::new();
-        image
-            .write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-            .map_err(|e| format!("图片编码失败: {}", e))?;
-        buf
-    };
-
-    let mut dynamic_image =
-        image::load_from_memory(&png_buffer).map_err(|e| format!("加载图片失败: {}", e))?;
+    let mut dynamic_image = screenshot_to_dynamic_image(&image)?;
 
     let cropped_image = dynamic_image.crop(x, y, width, height);
 
@@ -405,24 +397,7 @@ pub async fn capture_area_and_ocr(
 
     let image = screen.capture().map_err(|e| format!("截图失败: {}", e))?;
 
-    #[cfg(target_os = "windows")]
-    let buffer = image
-        .to_png(None)
-        .map_err(|e| format!("图片编码失败: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    let buffer = {
-        use screenshots::image::ImageFormat;
-        use std::io::Cursor;
-        let mut buf = Vec::new();
-        image
-            .write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-            .map_err(|e| format!("图片编码失败: {}", e))?;
-        buf
-    };
-
-    let mut dynamic_image =
-        image::load_from_memory(&buffer).map_err(|e| format!("加载图片失败: {}", e))?;
+    let mut dynamic_image = screenshot_to_dynamic_image(&image)?;
 
     let relative_x = (x - screen.display_info.x) as u32;
     let relative_y = (y - screen.display_info.y) as u32;
@@ -453,21 +428,7 @@ pub async fn capture_and_ocr(state: State<'_, AppState>) -> Result<String, Strin
     let screen = &screens[0];
     let image = screen.capture().map_err(|e| format!("截图失败: {}", e))?;
 
-    #[cfg(target_os = "windows")]
-    let buffer = image
-        .to_png(None)
-        .map_err(|e| format!("图片编码失败: {}", e))?;
-
-    #[cfg(target_os = "macos")]
-    let buffer = {
-        use screenshots::image::ImageFormat;
-        use std::io::Cursor;
-        let mut buf = Vec::new();
-        image
-            .write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
-            .map_err(|e| format!("图片编码失败: {}", e))?;
-        buf
-    };
+    let buffer = encode_image_to_png(&image)?;
 
     run_ocr_on_image_data(buffer, state).await
 }

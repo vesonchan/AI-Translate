@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslationRequest {
@@ -231,7 +230,7 @@ impl Translator {
 
     async fn translate_google(
         &self,
-        request: &TranslationRequest,
+        _request: &TranslationRequest,
     ) -> Result<TranslationResponse, String> {
         // todo: 预留口子
         Err("预留的,没实现呢".to_string())
@@ -239,7 +238,7 @@ impl Translator {
 
     async fn translate_baidu(
         &self,
-        request: &TranslationRequest,
+        _request: &TranslationRequest,
     ) -> Result<TranslationResponse, String> {
         // todo: 预留口子
         Err("预留的,没实现呢".to_string())
