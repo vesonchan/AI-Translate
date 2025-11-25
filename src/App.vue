@@ -1,0 +1,596 @@
+<script setup>
+import {computed, nextTick, onMounted, onUnmounted, ref} from "vue";
+import {invoke} from "@tauri-apps/api/core";
+import {getCurrentWindow} from "@tauri-apps/api/window";
+
+// 导入子组件
+import TitleBar from './components/TitleBar.vue'
+import LanguageSelector from './components/LanguageSelector.vue'
+import TextInput from './components/TextInput.vue'
+import TranslationResult from './components/TranslationResult.vue'
+import BottomToolbar from './components/BottomToolbar.vue'
+import HistoryModal from './components/HistoryModal.vue'
+import SettingsModal from './components/SettingsModal.vue'
+
+// 响应式数据
+const inputText = ref("");
+const translatedText = ref("");
+const isTranslating = ref(false);
+const isOcrProcessing = ref(false);
+const isPinned = ref(false);
+const showHistoryModal = ref(false);
+const showSettingsModal = ref(false);
+const translationHistory = ref([]);
+const supportedLanguages = ref([]);
+const selectedFromLang = ref("auto");
+const selectedToLang = ref("auto");
+const selectedService = ref("openai");
+
+// 设置相关数据
+const appConfig = ref({
+  translation: {
+    service: "openai",
+    base_url: "https://api.openai.com/v1",
+    api_key: "",
+    model_id: "gpt-5-nano"
+  },
+  ocr: {
+    base_url: "https://api.openai.com/v1",
+    api_key: "",
+    model_id: "gpt-4-vision-preview"
+  },
+  hotkeys: {
+    popup_window: "Ctrl+Shift+T",
+    slide_translation: "Ctrl+Shift+S",
+    screenshot_translation: "Ctrl+Shift+A"
+  }
+});
+
+const tempConfig = ref({
+  translation: {
+    service: "openai",
+    base_url: "https://api.openai.com/v1",
+    api_key: "",
+    model_id: "gpt-5-nano"
+  },
+  ocr: {
+    base_url: "https://api.openai.com/v1",
+    api_key: "",
+    model_id: "gpt-4-vision-preview"
+  },
+  hotkeys: {
+    popup_window: "Ctrl+Shift+T",
+    slide_translation: "Ctrl+Shift+S",
+    screenshot_translation: "Ctrl+Shift+A"
+  }
+});
+const hasChanges = ref(false);
+const isSaving = ref(false);
+const saveMessage = ref("");
+
+// 输入框引用
+const inputTextarea = ref(null);
+
+// 检测文本是否包含汉字
+const containsChinese = (text) => {
+  return /[\u4e00-\u9fa5]/.test(text);
+};
+
+// 预处理历史记录数据
+const processedHistory = computed(() => {
+  if (!Array.isArray(translationHistory.value)) return [];
+  
+  return translationHistory.value
+    .filter(record => record && typeof record === 'object')
+    .map(record => {
+      // 确保record对象存在且具有所有必需的属性
+      const safeRecord = record || {};
+      return {
+        id: safeRecord.id || Math.random().toString(36).substr(2, 9),
+        sourceText: safeRecord.original_text || '未知原文',
+        targetText: safeRecord.translated_text || '未知译文',
+        sourceLanguage: safeRecord.from_language || '未知语言',
+        targetLanguage: safeRecord.to_language || '未知语言',
+        timestamp: safeRecord.created_at || new Date().toISOString(),
+        service: safeRecord.service || '未知服务'
+      };
+    })
+    .filter(record => record && typeof record === 'object'); // 再次过滤确保结果有效
+});
+
+// 自动调整输入框高度
+const autoResize = () => {
+  nextTick(() => {
+    if (inputTextarea.value) {
+      inputTextarea.value.style.height = 'auto';
+      inputTextarea.value.style.height = inputTextarea.value.scrollHeight + 'px';
+    }
+  });
+};
+
+// 翻译功能
+const translate = async () => {
+  if (!inputText.value.trim()) return;
+  
+  try {
+    isTranslating.value = true;
+    
+    // 语言自动检测
+    let targetLang = selectedToLang.value;
+    const hasChinese = containsChinese(inputText.value);
+    
+    if (hasChinese) {
+      // 如果输入内容是中文目标语言也是中文，切换到英文模式。
+      if (targetLang === 'zh-CN' || targetLang === 'zh' || targetLang === 'zh-cn') {
+        targetLang = 'en';
+      }
+      // 否则保持原样
+    } else {
+      // 如果输入内容不是中文,则翻译成中文
+      targetLang = 'zh-CN';
+    }
+    
+    const result = await invoke("translate_text", {
+      text: inputText.value,
+      fromLanguage: selectedFromLang.value === "auto" ? null : selectedFromLang.value,
+      toLanguage: targetLang,
+      service: selectedService.value
+    });
+    
+    translatedText.value = result.translated_text;
+    
+    // 保存翻译记录到历史记录
+    try {
+      await invoke("save_translation", {
+        originalText: inputText.value,
+        translatedText: result.translated_text,
+        fromLanguage: selectedFromLang.value === "auto" ? "auto" : selectedFromLang.value,
+        toLanguage: targetLang,
+        service: result.service || selectedService.value
+      });
+    } catch (saveError) {
+      console.error("保存翻译记录失败:", saveError);
+      // 不影响翻译功能，只记录错误
+    }
+    
+  } catch (error) {
+    console.error("翻译失败:", error);
+    translatedText.value = `翻译失败: ${error}`;
+  } finally {
+    isTranslating.value = false;
+  }
+};
+
+// 清空输入
+const clearInput = () => {
+  inputText.value = "";
+  translatedText.value = "";
+  autoResize();
+};
+
+// 复制结果
+const copyResult = async () => {
+  if (!translatedText.value) return;
+  
+  try {
+    await navigator.clipboard.writeText(translatedText.value);
+    // 可以添加提示信息
+  } catch (error) {
+    console.error("复制失败:", error);
+  }
+};
+
+// 切换置顶
+const togglePin = async () => {
+  try {
+    const window = getCurrentWindow();
+    await window.setAlwaysOnTop(!isPinned.value);
+    isPinned.value = !isPinned.value;
+  } catch (error) {
+    console.error("设置置顶失败:", error);
+  }
+};
+
+// 区域截图功能
+const areaScreenshot = async () => {
+  try {
+    await invoke("start_area_selection");
+  } catch (error) {
+    console.error("启动区域选择失败:", error);
+    alert(`启动区域选择失败: ${error}`);
+  }
+};
+
+// 显示历史记录
+const showHistory = async () => {
+  try {
+    const history = await invoke("get_translation_history", { limit: 50, offset: 0 });
+    // 确保历史记录数据有效
+    translationHistory.value = Array.isArray(history) ? history.filter(record => record && typeof record === 'object') : [];
+    showHistoryModal.value = true;
+  } catch (error) {
+    console.error("获取历史记录失败:", error);
+    translationHistory.value = [];
+    showHistoryModal.value = true;
+  }
+};
+
+// 加载支持的语言
+const loadSupportedLanguages = async () => {
+  try {
+    supportedLanguages.value = await invoke("get_supported_languages");
+  } catch (error) {
+    console.error("获取支持的语言失败:", error);
+  }
+};
+
+// 监听输入变化
+const onInput = () => {
+  autoResize();
+  // 可以添加自动翻译功能
+};
+
+// 交换语言
+const swapLanguages = () => {
+  if (selectedFromLang.value === "auto") return;
+  
+  const temp = selectedFromLang.value;
+  selectedFromLang.value = selectedToLang.value;
+  selectedToLang.value = temp;
+  
+  // 如果有翻译结果，交换原文和译文
+  if (inputText.value && translatedText.value) {
+    const tempText = inputText.value;
+    inputText.value = translatedText.value;
+    translatedText.value = tempText;
+    autoResize();
+  }
+};
+
+// 粘贴功能
+const pasteText = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    inputText.value += text;
+    autoResize();
+  } catch (error) {
+    console.error("粘贴失败:", error);
+  }
+};
+
+// 设置相关函数
+const openSettings = () => {
+  // 深拷贝配置文件
+  tempConfig.value = JSON.parse(JSON.stringify(appConfig.value));
+  showSettingsModal.value = true
+}
+
+const closeSettings = () => {
+    showSettingsModal.value = false;
+};
+
+const showSettings = () => {
+    openSettings();
+};
+
+const loadSettings = async () => {
+  try {
+    const config = await invoke('get_app_config')
+    appConfig.value = config
+    tempConfig.value = JSON.parse(JSON.stringify(config))
+    
+    // 从配置中初始化 useTranslationForOcr
+    if (config.ocr && typeof config.ocr.reuse_translation !== 'undefined') {
+        useTranslationForOcr.value = config.ocr.reuse_translation
+    }
+  } catch (error) {
+    console.error('加载设置失败:', error)
+    alert('加载配置失败: ' + error);
+    // 仅在首次运行且配置不存在时自动打开设置页面
+    if (error.message && error.message.includes("应用配置不存在")) {
+      console.log('首次运行，自动打开设置页面')
+      showSettingsModal.value = true
+    }
+  }
+}
+
+// ESC键关闭支持
+const handleKeydown = (event) => {
+  if (event.key === 'Escape' && showSettingsModal.value) {
+    closeSettings()
+  }
+  if (event.ctrlKey && event.key === 'Enter') {
+    translate()
+  }
+}
+
+const saveSettings = async () => {
+  if (!tempConfig.value?.translation?.api_key?.trim()) {
+    saveMessage.value = { text: '请输入翻译API密钥', type: 'error' }
+    setTimeout(() => saveMessage.value = '', 3000)
+    return
+  }
+  
+  if (!useTranslationForOcr.value && !tempConfig.value?.ocr?.api_key?.trim()) {
+    saveMessage.value = { text: '请输入OCR API密钥', type: 'error' }
+    setTimeout(() => saveMessage.value = '', 3000)
+    return
+  }
+  
+  isSaving.value = true
+  try {
+    // 保存OCR复用配置
+    const configToSave = JSON.parse(JSON.stringify(tempConfig.value))
+    configToSave.ocr.reuse_translation = useTranslationForOcr.value
+    
+    await invoke('save_app_config', { config: configToSave })
+    appConfig.value = JSON.parse(JSON.stringify(configToSave))
+    
+    // 重新应用这些快捷方式的功能
+    try {
+      await invoke('reload_shortcuts')
+    } catch (error) {
+      console.error('重新加载快捷键失败:', error)
+    }
+    
+    hasChanges.value = false
+    saveMessage.value = { text: '设置已保存', type: 'success' }
+    setTimeout(() => saveMessage.value = '', 3000)
+  } catch (error) {
+    console.error('保存设置详细错误:', error);
+    // 尝试获取更详细的错误信息
+    let errorMsg = error;
+    if (typeof error === 'object') {
+      errorMsg = JSON.stringify(error);
+    }
+    alert('保存设置失败: ' + errorMsg);
+    saveMessage.value = { text: '保存失败: ' + errorMsg, type: 'error' }
+    setTimeout(() => saveMessage.value = '', 3000)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// OCR复用翻译配置
+const useTranslationForOcr = ref(true)
+
+const onTranslationServiceChange = () => {
+  // 确保tempConfig.value.translation存在
+  if (!tempConfig.value || !tempConfig.value.translation) {
+    return
+  }
+  
+  // 根据服务更新默认配置
+  const serviceDefaults = {
+    openai: {
+      base_url: 'https://api.openai.com/v1',
+      model_id: 'gpt-5-nano'
+    },
+    // google: {
+    //   base_url: 'https://translation.googleapis.com/language/translate/v2',
+    //   model_id: ''
+    // },
+    // baidu: {
+    //   base_url: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
+    //   model_id: ''
+    // }
+  }
+  
+  const service = tempConfig.value.translation.service || 'openai'
+  const defaults = serviceDefaults[service]
+  if (defaults) {
+    const currentServiceDefaults = serviceDefaults[appConfig.value?.translation?.service] || {}
+    if (!tempConfig.value.translation.base_url || tempConfig.value.translation.base_url === currentServiceDefaults.base_url) {
+      tempConfig.value.translation.base_url = defaults.base_url
+    }
+    if (!tempConfig.value.translation.model_id || tempConfig.value.translation.model_id === currentServiceDefaults.model_id) {
+      tempConfig.value.translation.model_id = defaults.model_id
+    }
+  }
+  
+  checkChanges()
+}
+
+// 检测配置变化
+const checkChanges = () => {
+  hasChanges.value = JSON.stringify(appConfig.value) !== JSON.stringify(tempConfig.value)
+}
+
+// 历史记录相关函数
+const clearHistory = async () => {
+  try {
+    await invoke("clear_translation_history");
+    translationHistory.value = [];
+  } catch (error) {
+    console.error("清空历史记录失败:", error);
+  }
+};
+
+const copyHistoryText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    console.error("复制失败:", error);
+  }
+};
+
+const useHistoryItem = (item) => {
+  inputText.value = item.sourceText;
+  translatedText.value = item.targetText;
+  showHistoryModal.value = false;
+  autoResize();
+};
+
+// 组件挂载时初始化
+onMounted(async () => {
+  await loadSupportedLanguages();
+  await loadSettings();
+  autoResize();
+  
+  // 初始化表头和最下面的
+  try {
+    const window = getCurrentWindow();
+    isPinned.value = await window.isAlwaysOnTop();
+  } catch (error) {
+    console.error("获取置顶状态失败:", error);
+  }
+  
+  // 添加键盘事件监听器
+  document.addEventListener('keydown', handleKeydown);
+  
+  // 监听OCR结果事件
+  await getCurrentWindow().listen('ocr-result', (event) => {
+    console.log('收到ocr-result事件:', event.payload);
+    const ocrText = event.payload;
+    console.log('OCR文本:', ocrText, '长度:', ocrText ? ocrText.length : 'null');
+    
+    // 改进条件检查，确保所有OCR结果都能被处理
+    if (ocrText !== null && ocrText !== undefined) {
+      if (ocrText.startsWith("Error:")) {
+        console.log('显示OCR错误:', ocrText);
+        inputText.value = ocrText; // Show error
+        } else {
+          const trimmedText = ocrText.trim();
+          console.log('设置OCR结果:', trimmedText);
+          // 直接更新inputText的值，TextInput组件会通过watch监听到变化
+          inputText.value = trimmedText;
+          console.log('inputText.value已更新为:', inputText.value);
+        }
+      autoResize();
+      isOcrProcessing.value = false; // Stop OCR loading
+    } else {
+      console.log('OCR文本为null或undefined，忽略');
+    }
+  });
+// 监听ocr识别结果
+  await getCurrentWindow().listen('ocr-pending', () => {
+    isOcrProcessing.value = true;
+  });
+});
+
+// 组件卸载时清理
+onUnmounted(() => {
+  // 移除键盘事件监听器
+  document.removeEventListener('keydown', handleKeydown);
+});
+</script>
+
+<template>
+  <div class="app-container">
+    <!-- 顶部标题栏 -->
+    <TitleBar 
+      @minimize="() => getCurrentWindow().minimize()"
+      @close="() => getCurrentWindow().close()"
+    />
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 语言选择器 -->
+      <LanguageSelector
+        :source-language="selectedFromLang"
+        :target-language="selectedToLang"
+        :supported-languages="supportedLanguages"
+        :selected-service="selectedService"
+        @update:source-language="selectedFromLang = $event"
+        @update:target-language="selectedToLang = $event"
+        @update:selected-service="selectedService = $event"
+        @swap-languages="swapLanguages"
+      />
+
+      <!-- 输入区域 -->
+      <TextInput
+        v-model="inputText"
+        :is-translating="isTranslating"
+        :is-ocr-processing="isOcrProcessing"
+        @translate="translate"
+        @paste="pasteText"
+        @clear="clearInput"
+        @keydown="handleKeydown"
+      />
+
+      <!-- 结果区域 -->
+      <TranslationResult
+        :translated-text="translatedText"
+        :is-translating="isTranslating"
+        @copy="copyResult"
+      />
+    </div>
+
+    <!-- 底部工具栏 -->
+    <BottomToolbar
+      :is-pinned="isPinned"
+      @toggle-pin="togglePin"
+      @show-history="showHistory"
+      @show-settings="showSettings"
+      @start-ocr="areaScreenshot"
+    />
+
+    <!-- 历史记录模态框 -->
+    <HistoryModal
+      :show="showHistoryModal"
+      :history="processedHistory"
+      @close="showHistoryModal = false"
+      @clear-history="clearHistory"
+      @copy-history="copyHistoryText"
+      @use-history="useHistoryItem"
+    />
+
+    <!-- 设置模态框 -->
+    <SettingsModal
+      :show="showSettingsModal"
+      :config="tempConfig"
+      :use-translation-for-ocr="useTranslationForOcr"
+      :has-changes="hasChanges"
+      :is-saving="isSaving"
+      :save-message="saveMessage"
+      @close="closeSettings"
+      @save="saveSettings"
+      @update:use-translation-for-ocr="useTranslationForOcr = $event"
+      @update:config="tempConfig = $event"
+      @check-changes="checkChanges"
+      @on-translation-service-change="onTranslationServiceChange"
+    />
+  </div>
+</template>
+
+<style>
+/* 全局隐藏滚动条 */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html, body {
+  overflow: hidden;
+}
+</style>
+
+<style scoped>
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 主内容区 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden; /* Hide scrollbar */
+  /* Space for bottom toolbar */
+  padding: 12px 12px 60px;
+}
+
+/* 通用样式 */
+.spacer {
+  flex: 1;
+}
+</style>
