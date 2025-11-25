@@ -122,13 +122,10 @@
           <div class="setting-item">
             <label class="setting-label">
               <span>弹出窗口</span>
-              <input 
-                type="text" 
+              <HotkeyRecorder
                 v-model="localConfig.hotkeys.popup_window"
-                class="setting-input"
                 placeholder="Ctrl+Shift+T"
-                readonly
-              >
+              />
             </label>
             <p class="setting-hint">按下快捷键弹出翻译窗口</p>
           </div>
@@ -136,13 +133,10 @@
           <div class="setting-item">
             <label class="setting-label">
               <span>滑动翻译</span>
-              <input 
-                type="text" 
+              <HotkeyRecorder
                 v-model="localConfig.hotkeys.slide_translation"
-                class="setting-input"
                 placeholder="Ctrl+Shift+S"
-                readonly
-              >
+              />
             </label>
             <p class="setting-hint">按下快捷键启动滑动翻译</p>
           </div>
@@ -150,13 +144,10 @@
           <div class="setting-item">
             <label class="setting-label">
               <span>截图翻译</span>
-              <input 
-                type="text" 
+              <HotkeyRecorder
                 v-model="localConfig.hotkeys.screenshot_translation"
-                class="setting-input"
                 placeholder="Ctrl+Shift+A"
-                readonly
-              >
+              />
             </label>
             <p class="setting-hint">按下快捷键启动截图翻译</p>
           </div>
@@ -200,6 +191,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import HotkeyRecorder from './HotkeyRecorder.vue'
 
 const props = defineProps({
   show: Boolean,

@@ -1,12 +1,6 @@
 name: Release Builds
 
 on:
-  push:
-    branches:
-      - master
-      - main
-    tags:
-      - "v*"
   release:
     types:
       - published
