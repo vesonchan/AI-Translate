@@ -19,10 +19,10 @@
             <label class="setting-label">
               <span>翻译服务</span>
               <select v-model="localConfig.translation.service" class="setting-select">
-                <option value="openai">OpenAI</option>
-                <option value="google">Google 翻译</option>
-                <option value="baidu">百度翻译</option>
-                <option value="youdao">有道翻译</option>
+                <option value="openai">OpenAI兼容模式</option>
+<!--                <option value="google">Google 翻译</option>-->
+<!--                <option value="baidu">百度翻译</option>-->
+<!--                <option value="youdao">有道翻译</option>-->
               </select>
             </label>
           </div>

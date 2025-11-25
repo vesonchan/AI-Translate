@@ -5,6 +5,8 @@ on:
     branches:
       - master
       - main
+    tags:
+      - "v*"
   release:
     types:
       - published
@@ -51,6 +53,20 @@ jobs:
           releaseId: ${{ github.event.release.id }}
           tauriScript: pnpm tauri
 
+      - name: Build and publish tagged release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Prism ${{ github.ref_name }}
+          releaseBody: |
+            Automated release for `${{ github.ref_name }}` built from ${{ github.sha }}.
+          releaseDraft: false
+          prerelease: false
+          tauriScript: pnpm tauri
+
       - name: Build (push to main/master)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
         run: pnpm tauri build
