@@ -164,16 +164,34 @@
       </div>
       
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="resetToDefaults">
-          恢复默认
-        </button>
-        <div class="footer-right">
-          <button class="btn btn-secondary" @click="$emit('close')">
-            取消
+        <div class="footer-left">
+          <div v-if="validationError" class="footer-message error">
+            {{ validationError }}
+          </div>
+          <div
+            v-else-if="saveMessage"
+            class="footer-message"
+            :class="typeof saveMessage === 'object' ? saveMessage.type : 'info'"
+          >
+            {{ typeof saveMessage === 'object' ? saveMessage.text : saveMessage }}
+          </div>
+        </div>
+        <div class="footer-actions">
+          <button class="btn btn-secondary" @click="resetToDefaults">
+            恢复默认
           </button>
-          <button class="btn btn-primary" @click="saveSettings">
-            保存
-          </button>
+          <div class="footer-right">
+            <button class="btn btn-secondary" @click="$emit('close')">
+              取消
+            </button>
+            <button
+              class="btn btn-primary"
+              :disabled="isSaving"
+              @click="saveSettings"
+            >
+              {{ isSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -185,7 +203,15 @@ import { ref, watch } from 'vue'
 
 const props = defineProps({
   show: Boolean,
-  config: Object
+  config: [Object, Array],
+  isSaving: {
+    type: Boolean,
+    default: false
+  },
+  saveMessage: {
+    type: [String, Object],
+    default: ''
+  }
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -211,21 +237,80 @@ const defaultConfig = {
   }
 }
 
-const localConfig = ref({})
+const localConfig = ref(JSON.parse(JSON.stringify(defaultConfig)))
+const validationError = ref('')
 
-watch(() => props.show, (newShow) => {
-  if (newShow && props.config) {
-    // 深拷贝配置以避免直接修改props
-    localConfig.value = JSON.parse(JSON.stringify(props.config))
+const normalizeConfig = (config) => {
+  if (!config) return null
+
+  if (config.translation && config.ocr && config.hotkeys) {
+    return config
   }
-})
+
+  if (
+    typeof config === 'object' &&
+    config !== null &&
+    'value' in config &&
+    config.value &&
+    typeof config.value === 'object'
+  ) {
+    return config.value
+  }
+
+  return null
+}
+
+const syncLocalConfig = () => {
+  const normalized = normalizeConfig(props.config)
+  if (normalized) {
+    localConfig.value = JSON.parse(JSON.stringify(normalized))
+  } else {
+    localConfig.value = JSON.parse(JSON.stringify(defaultConfig))
+  }
+}
+
+watch(
+  () => props.show,
+  (newShow) => {
+    if (newShow) {
+      syncLocalConfig()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.config,
+  () => {
+    if (props.show) {
+      syncLocalConfig()
+    }
+  },
+  { deep: true }
+)
 
 const resetToDefaults = () => {
   localConfig.value = JSON.parse(JSON.stringify(defaultConfig))
 }
 
 const saveSettings = () => {
-  emit('save', localConfig.value)
+  validationError.value = ''
+  const payload = JSON.parse(JSON.stringify(localConfig.value || defaultConfig))
+
+  if (!payload.translation?.api_key?.trim()) {
+    validationError.value = '请输入翻译API密钥'
+    return
+  }
+
+  if (
+    !payload.ocr?.reuse_translation &&
+    !payload.ocr?.api_key?.trim()
+  ) {
+    validationError.value = '请输入OCR API密钥'
+    return
+  }
+
+  emit('save', payload)
   emit('close')
 }
 </script>
@@ -365,14 +450,38 @@ const saveSettings = () => {
 .modal-footer {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   align-items: center;
   padding: 16px 24px 20px;
   border-top: 1px solid #e5e7eb;
 }
 
+.footer-left {
+  flex: 1;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .footer-right {
   display: flex;
   gap: 12px;
+}
+
+.footer-message {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.footer-message.error {
+  color: #dc2626;
+}
+
+.footer-message.success {
+  color: #10b981;
 }
 
 .btn {
@@ -397,6 +506,11 @@ const saveSettings = () => {
 .btn-primary {
   background: #3b82f6;
   color: white;
+}
+
+.btn-primary[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .btn-primary:hover {

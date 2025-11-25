@@ -304,14 +304,19 @@ const handleKeydown = (event) => {
   }
 }
 
-const saveSettings = async () => {
-  if (!tempConfig.value?.translation?.api_key?.trim()) {
+const saveSettings = async (newConfig) => {
+  // 如果没有传入newConfig，则使用tempConfig (兼容旧调用方式)
+  const configToProcess = newConfig || tempConfig.value;
+
+  if (!configToProcess?.translation?.api_key?.trim()) {
     saveMessage.value = { text: '请输入翻译API密钥', type: 'error' }
     setTimeout(() => saveMessage.value = '', 3000)
     return
   }
   
-  if (!useTranslationForOcr.value && !tempConfig.value?.ocr?.api_key?.trim()) {
+  // 检查OCR配置
+  const reuseTranslation = configToProcess.ocr.reuse_translation;
+  if (!reuseTranslation && !configToProcess?.ocr?.api_key?.trim()) {
     saveMessage.value = { text: '请输入OCR API密钥', type: 'error' }
     setTimeout(() => saveMessage.value = '', 3000)
     return
@@ -319,12 +324,15 @@ const saveSettings = async () => {
   
   isSaving.value = true
   try {
-    // 保存OCR复用配置
-    const configToSave = JSON.parse(JSON.stringify(tempConfig.value))
-    configToSave.ocr.reuse_translation = useTranslationForOcr.value
+    // 准备要保存的配置
+    const configToSave = JSON.parse(JSON.stringify(configToProcess))
     
     await invoke('save_app_config', { config: configToSave })
+    
+    // 更新本地状态
     appConfig.value = JSON.parse(JSON.stringify(configToSave))
+    tempConfig.value = JSON.parse(JSON.stringify(configToSave))
+    useTranslationForOcr.value = configToSave.ocr.reuse_translation
     
     // 重新应用这些快捷方式的功能
     try {
@@ -544,7 +552,7 @@ onUnmounted(() => {
       :is-saving="isSaving"
       :save-message="saveMessage"
       @close="closeSettings"
-      @save="saveSettings"
+      @save="saveSettings($event)"
       @update:use-translation-for-ocr="useTranslationForOcr = $event"
       @update:config="tempConfig = $event"
       @check-changes="checkChanges"

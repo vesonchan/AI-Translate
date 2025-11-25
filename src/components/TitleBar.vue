@@ -1,13 +1,13 @@
 <template>
-  <div class="title-bar">
-    <div class="title">AI翻译助手</div>
-    <div class="window-controls">
-      <button class="control-btn minimize" @click="$emit('minimize')">
+  <div class="title-bar" data-tauri-drag-region>
+    <div class="title">Prism</div>
+    <div class="window-controls" data-tauri-drag-region="false">
+      <button class="control-btn minimize" data-tauri-drag-region="false" @click="$emit('minimize')">
         <svg width="12" height="12" viewBox="0 0 12 12">
           <line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.5"/>
         </svg>
       </button>
-      <button class="control-btn close" @click="$emit('close')">
+      <button class="control-btn close" data-tauri-drag-region="false" @click="$emit('close')">
         <svg width="12" height="12" viewBox="0 0 12 12">
           <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/>
           <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.5"/>
