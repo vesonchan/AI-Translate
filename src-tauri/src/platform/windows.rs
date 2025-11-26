@@ -1,5 +1,5 @@
 use screenshots::Screen;
-use tauri::{AppHandle, WebviewUrl};
+use tauri::{AppHandle, WebviewUrl, PhysicalPosition, PhysicalSize, Position, Size};
 
 pub async fn start_area_selection(app_handle: AppHandle) -> Result<(), String> {
     let screens = Screen::all().map_err(|e| format!("获取屏幕列表失败: {}", e))?;
@@ -21,8 +21,8 @@ pub async fn start_area_selection(app_handle: AppHandle) -> Result<(), String> {
         max_y = max_y.max(info.y + info.height as i32);
     }
 
-    let width = (max_x - min_x) as f64;
-    let height = (max_y - min_y) as f64;
+    let width = (max_x - min_x) as u32;
+    let height = (max_y - min_y) as u32;
 
     let window = tauri::WebviewWindowBuilder::new(
         &app_handle,
@@ -30,8 +30,6 @@ pub async fn start_area_selection(app_handle: AppHandle) -> Result<(), String> {
         WebviewUrl::App("area-selector.html".into()),
     )
     .title("区域选择")
-    .position(min_x as f64, min_y as f64)
-    .inner_size(width, height)
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
@@ -40,6 +38,14 @@ pub async fn start_area_selection(app_handle: AppHandle) -> Result<(), String> {
     .visible(false)
     .build()
     .map_err(|e| format!("创建区域选择窗口失败: {}", e))?;
+
+    window
+        .set_position(Position::Physical(PhysicalPosition { x: min_x, y: min_y }))
+        .map_err(|e| format!("设置区域选择窗口位置失败: {}", e))?;
+
+    window
+        .set_size(Size::Physical(PhysicalSize { width, height }))
+        .map_err(|e| format!("设置区域选择窗口大小失败: {}", e))?;
 
     window
         .show()
