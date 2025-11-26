@@ -130,9 +130,12 @@ impl Translator {
             "开始请求大模型翻译从 {} 到 {}.",
             request.from_lang, request.to_lang
         );
+        // 将蛇形&驼峰都转成标准的格式
+        let normalized_text = Self::normalize_naming_convention(&request.text);
+        let text_to_translate = &normalized_text;
         let prompt = format!(
             "Translate the following text from {} to {}. Only return the translated text, no explanations:\n\n{}",
-            request.from_lang, request.to_lang, request.text
+            request.from_lang, request.to_lang, text_to_translate
         );
 
         let body = serde_json::json!({
@@ -207,6 +210,29 @@ impl Translator {
     ) -> Result<TranslationResponse, String> {
         // todo: 预留口子
         Err("预留的,没实现呢".to_string())
+    }
+
+    fn normalize_naming_convention(text: &str) -> String {
+        // 将蛇形命名法转换为标准格式（用空格替换下划线）
+        // 将驼峰命名法转换为标准格式（在大写字母前插入空格）
+        let mut result = String::new();
+        let mut prev_is_lower = false;
+
+        for ch in text.chars() {
+            if ch == '_' || ch == '-'{
+                result.push(' ');
+                prev_is_lower = false;
+            } else if ch.is_uppercase() && prev_is_lower {
+                result.push(' ');
+                result.push(ch);
+                prev_is_lower = false;
+            } else {
+                result.push(ch);
+                prev_is_lower = ch.is_lowercase();
+            }
+        }
+        println!("{}", result);
+        result
     }
 }
 

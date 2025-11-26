@@ -78,6 +78,55 @@ const containsChinese = (text) => {
   return /[\u4e00-\u9fa5]/.test(text);
 };
 
+const normalizeLanguageCode = (lang) => (lang || "").toLowerCase();
+
+const isChineseLanguage = (lang) => {
+  const normalized = normalizeLanguageCode(lang);
+  return [
+    "zh",
+    "zh-cn",
+    "zh_cn",
+    "zh-hans",
+    "zh_hans",
+    "zh-tw",
+    "zh_tw",
+    "zh-hant",
+    "zh_hant"
+  ].includes(normalized);
+};
+
+const resolveTargetLanguage = (hasChineseInput) => {
+  const preferredTarget = selectedToLang.value || "auto";
+  const normalizedTarget = normalizeLanguageCode(preferredTarget);
+  const targetIsAuto = normalizedTarget === "auto";
+  const targetIsChinese = isChineseLanguage(preferredTarget);
+  const shouldAutoResolve = targetIsAuto || targetIsChinese;
+
+  if (selectedFromLang.value === "auto") {
+    if (hasChineseInput && shouldAutoResolve) {
+      return "en";
+    }
+    if (!hasChineseInput && shouldAutoResolve) {
+      return "zh-CN";
+    }
+    return preferredTarget;
+  }
+
+  if (targetIsAuto) {
+    return hasChineseInput ? "en" : "zh-CN";
+  }
+
+  return preferredTarget;
+};
+
+const resolveFromLanguage = (hasChineseInput) => {
+  const preferredSource = selectedFromLang.value || "auto";
+  if (preferredSource !== "auto") {
+    return preferredSource;
+  }
+  return hasChineseInput ? "zh-CN" : "auto";
+};
+
 // 预处理历史记录数据
 const processedHistory = computed(() => {
   if (!Array.isArray(translationHistory.value)) return [];
@@ -118,23 +167,13 @@ const translate = async () => {
     isTranslating.value = true;
     
     // 语言自动检测
-    let targetLang = selectedToLang.value;
     const hasChinese = containsChinese(inputText.value);
-    
-    if (hasChinese) {
-      // 如果输入内容是中文目标语言也是中文，切换到英文模式。
-      if (targetLang === 'zh-CN' || targetLang === 'zh' || targetLang === 'zh-cn') {
-        targetLang = 'en';
-      }
-      // 否则保持原样
-    } else {
-      // 如果输入内容不是中文,则翻译成中文
-      targetLang = 'zh-CN';
-    }
+    const fromLang = resolveFromLanguage(hasChinese);
+    const targetLang = resolveTargetLanguage(hasChinese);
     
     const result = await invoke("translate_text", {
       text: inputText.value,
-      fromLanguage: selectedFromLang.value === "auto" ? null : selectedFromLang.value,
+      fromLanguage: fromLang,
       toLanguage: targetLang,
       service: selectedService.value
     });
@@ -146,7 +185,7 @@ const translate = async () => {
       await invoke("save_translation", {
         originalText: inputText.value,
         translatedText: result.translated_text,
-        fromLanguage: selectedFromLang.value === "auto" ? "auto" : selectedFromLang.value,
+        fromLanguage: fromLang,
         toLanguage: targetLang,
         service: result.service || selectedService.value
       });
