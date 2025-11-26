@@ -1,7 +1,12 @@
 use screenshots::Screen;
-use tauri::{AppHandle, WebviewUrl, PhysicalPosition, PhysicalSize, Position, Size};
+use tauri::{AppHandle, WebviewUrl, PhysicalPosition, PhysicalSize, Position, Size, Manager};
 
 pub async fn start_area_selection(app_handle: AppHandle) -> Result<(), String> {
+    // Hide main window before showing area selector
+    if let Some(main_window) = app_handle.get_webview_window("main") {
+        main_window.hide().map_err(|e| format!("隐藏主窗口失败: {}", e))?;
+    }
+
     let screens = Screen::all().map_err(|e| format!("获取屏幕列表失败: {}", e))?;
 
     if screens.is_empty() {
