@@ -9,10 +9,6 @@ const PREFILL_EVENT: &str = "prefill-text";
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 const COPY_SHORTCUT_ATTEMPTS: usize = 3;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-const COPY_RETRY_BASE_DELAY_MS: u64 = 180;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-const COPY_RETRY_DELAY_STEP_MS: u64 = 90;
 
 pub fn register_shortcuts(app: &AppHandle) {
     eprintln!("register_shortcuts()");
@@ -30,18 +26,18 @@ pub fn register_shortcuts(app: &AppHandle) {
     if !hotkeys.popup_window.is_empty() {
         if let Ok(shortcut) = Shortcut::from_str(&hotkeys.popup_window) {
             let app_handle = app.clone();
-            // 直接使用 on_shortcut，不需要先 register
+            // ç›´æŽ¥ä½¿ç”¨ on_shortcutï¼Œä¸éœ€è¦å…ˆ register
             let result =
                 app.global_shortcut()
                     .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                        eprintln!("🎯 SHORTCUT TRIGGERED: {:?}", shortcut);
+                        eprintln!("ðŸŽ¯ SHORTCUT TRIGGERED: {:?}", shortcut);
                         eprintln!("Event state: {:?}", event.state);
                         if event.state == ShortcutState::Pressed {
                             if app_handle.get_webview_window("main").is_some() {
-                                eprintln!("✓ Window found, forcing focus...");
+                                eprintln!("âœ“ Window found, forcing focus...");
                                 show_main_window(&app_handle);
                             } else {
-                                eprintln!("✗ Window 'main' NOT FOUND!");
+                                eprintln!("âœ— Window 'main' NOT FOUND!");
                             }
                         }
                     });
@@ -116,7 +112,7 @@ pub fn register_shortcuts(app: &AppHandle) {
 async fn handle_area_ocr_shortcut(app_handle: AppHandle) {
     let handle_for_recovery = app_handle.clone();
     if let Err(err) = start_area_selection(app_handle).await {
-        eprintln!("启动区域截图失败: {}", err);
+        eprintln!("å¯åŠ¨åŒºåŸŸæˆªå›¾å¤±è´¥: {}", err);
         show_main_window(&handle_for_recovery);
     }
 }
@@ -142,23 +138,35 @@ fn truncate_for_display(s: &str, max_chars: usize) -> String {
 }
 
 fn capture_selected_text() -> Option<String> {
-    eprintln!("📝 [Capture] Starting text capture...");
+    eprintln!("ðŸ“ [Capture] Starting text capture...");
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(text) = capture_via_windows_ui_automation() {
+            eprintln!(
+                "âœ… [Capture] Success via UI Automation: {}",
+                truncate_for_display(&text, 50)
+            );
+            return Some(text);
+        }
+        eprintln!("âš ï¸  [Capture] UI Automation failed, trying clipboard...");
+    }
 
     #[cfg(target_os = "macos")]
     {
         match capture_via_macos_accessibility() {
             Some(text) if !text.trim().is_empty() => {
                 eprintln!(
-                    "✅ [Capture] Success via accessibility: {}",
+                    "âœ… [Capture] Success via accessibility: {}",
                     truncate_for_display(&text, 50)
                 );
                 return Some(text);
             }
             Some(_) => {
-                eprintln!("❌ [Capture] Accessibility returned empty text, continuing...");
+                eprintln!("âŒ [Capture] Accessibility returned empty text, continuing...");
             }
             None => {
-                eprintln!("⚠️  [Capture] Accessibility API capture failed, trying clipboard...");
+                eprintln!("âš ï¸  [Capture] Accessibility API capture failed, trying clipboard...");
             }
         }
     }
@@ -168,11 +176,11 @@ fn capture_selected_text() -> Option<String> {
 
     if let Some(text) = capture_via_primary_selection() {
         if !looks_like_file_path(&text) {
-            eprintln!("✅ [Capture] Success: {}", truncate_for_display(&text, 50));
+            eprintln!("âœ… [Capture] Success: {}", truncate_for_display(&text, 50));
             return Some(text);
         } else {
             eprintln!(
-                "⚠️  [Capture] Got file path from primary selection: {:?}",
+                "âš ï¸  [Capture] Got file path from primary selection: {:?}",
                 text
             );
             #[cfg(target_os = "linux")]
@@ -182,7 +190,7 @@ fn capture_selected_text() -> Option<String> {
             #[cfg(not(target_os = "linux"))]
             {
                 eprintln!(
-                    "❌ [Capture] Skipping clipboard fallback on this platform (file path detected)"
+                    "âŒ [Capture] Skipping clipboard fallback on this platform (file path detected)"
                 );
                 return None;
             }
@@ -195,7 +203,7 @@ fn capture_selected_text() -> Option<String> {
         #[cfg(not(target_os = "linux"))]
         {
             eprintln!(
-                "❌ [Capture] Primary selection capture failed and clipboard fallback is disabled"
+                "âŒ [Capture] Primary selection capture failed and clipboard fallback is disabled"
             );
             return None;
         }
@@ -204,11 +212,11 @@ fn capture_selected_text() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         if should_try_direct_clipboard {
-            eprintln!("⏭️  [Capture] Primary selection unavailable, trying direct clipboard...");
+            eprintln!("â­ï¸  [Capture] Primary selection unavailable, trying direct clipboard...");
 
             if let Some(text) = read_clipboard_directly() {
                 eprintln!(
-                    "✅ [Capture] Success via direct clipboard: {}",
+                    "âœ… [Capture] Success via direct clipboard: {}",
                     truncate_for_display(&text, 50)
                 );
                 return Some(text);
@@ -237,17 +245,147 @@ fn looks_like_file_path(text: &str) -> bool {
     is_path || has_path_structure
 }
 
+#[cfg(target_os = "windows")]
+fn capture_via_windows_ui_automation() -> Option<String> {
+    use windows::{
+        core::{Interface, BSTR},
+        Win32::{
+            System::{
+                Com::{
+                    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+                },
+            },
+            UI::Accessibility::{
+                CUIAutomation, IUIAutomation, IUIAutomationLegacyIAccessiblePattern,
+                IUIAutomationTextPattern, IUIAutomationValuePattern, UIA_LegacyIAccessiblePatternId,
+                UIA_TextPattern2Id, UIA_TextPatternId, UIA_ValuePatternId,
+            },
+        },
+    };
+
+    eprintln!("ðŸ” [UI Automation] Starting capture...");
+
+    unsafe {
+        // Initialize COM
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+        let automation: IUIAutomation =
+            match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("âŒ [UI Automation] Failed to create CUIAutomation: {}", e);
+                    return None;
+                }
+            };
+
+        let element = match automation.GetFocusedElement() {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("âŒ [UI Automation] Failed to get focused element: {}", e);
+                return None;
+            }
+        };
+
+        // Try TextPattern
+        if let Ok(pattern) = element.GetCurrentPattern(UIA_TextPatternId) {
+            let pattern: IUIAutomationTextPattern = match pattern.cast() {
+                Ok(p) => p,
+                Err(_) => return None,
+            };
+
+            if let Ok(ranges) = pattern.GetSelection() {
+                if let Ok(length) = ranges.Length() {
+                    if length > 0 {
+                        if let Ok(range) = ranges.GetElement(0) {
+                            if let Ok(text) = range.GetText(-1) {
+                                let text_str = text.to_string();
+                                if !text_str.is_empty() {
+                                    return Some(text_str);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if let Ok(pattern) = element.GetCurrentPattern(UIA_TextPattern2Id) {
+             // Fallback to TextPattern2 (though it inherits from TextPattern, sometimes casting helps?)
+             let pattern: IUIAutomationTextPattern = match pattern.cast() {
+                Ok(p) => p,
+                Err(_) => return None,
+            };
+             if let Ok(ranges) = pattern.GetSelection() {
+                if let Ok(length) = ranges.Length() {
+                    if length > 0 {
+                        if let Ok(range) = ranges.GetElement(0) {
+                            if let Ok(text) = range.GetText(-1) {
+                                let text_str = text.to_string();
+                                if !text_str.is_empty() {
+                                    return Some(text_str);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if let Ok(pattern) = element.GetCurrentPattern(UIA_ValuePatternId) {
+             // Fallback to ValuePattern (e.g. for simple text boxes)
+             let pattern: IUIAutomationValuePattern = match pattern.cast() {
+                Ok(p) => p,
+                Err(_) => return None,
+            };
+            if let Ok(value) = pattern.CurrentValue() {
+                 let value_str = value.to_string();
+                 if !value_str.is_empty() {
+                     return Some(value_str);
+                 }
+            }
+        } else if let Ok(pattern) = element.GetCurrentPattern(UIA_LegacyIAccessiblePatternId) {
+             // Fallback to LegacyIAccessiblePattern (older apps)
+             let pattern: IUIAutomationLegacyIAccessiblePattern = match pattern.cast() {
+                Ok(p) => p,
+                Err(_) => return None,
+            };
+            
+            // Try CurrentValue first
+            if let Ok(value) = pattern.CurrentValue() {
+                 let value_str = value.to_string();
+                 if !value_str.is_empty() {
+                     return Some(value_str);
+                 }
+            }
+            
+            // If no value, maybe it's a selection? LegacyIAccessible doesn't have a direct "Selection" text method like TextPattern.
+            // But sometimes CurrentName holds the text for static text controls.
+            // However, we want *selected* text. LegacyIAccessible doesn't easily give *selected* text unless the whole control is the selection.
+            // We'll stick to CurrentValue for now as it maps to "Value" of the control.
+        } else {
+            // Log debug info
+            let name = element.CurrentName().unwrap_or(BSTR::new());
+            let class_name = element.CurrentClassName().unwrap_or(BSTR::new());
+            let control_type = element.CurrentControlType().unwrap_or(windows::Win32::UI::Accessibility::UIA_CONTROLTYPE_ID(0));
+            
+            eprintln!(
+                "âš ï¸  [UI Automation] Focused element does not support TextPattern. Name: '{}', Class: '{}', ControlType: {}",
+                name, class_name, control_type.0
+            );
+        }
+    }
+
+    None
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn capture_via_primary_selection() -> Option<String> {
     use arboard::Clipboard;
+    use std::time::{Duration, Instant};
 
-    eprintln!("🔍 [Primary Selection] Starting capture...");
+    eprintln!("ðŸ” [Primary Selection] Starting capture...");
 
     let mut clipboard = Clipboard::new().ok()?;
     let original_clipboard = clipboard.get_text().ok();
 
     eprintln!(
-        "📋 [Primary Selection] Original clipboard: {:?}",
+        "ðŸ“‹ [Primary Selection] Original clipboard: {:?}",
         original_clipboard
             .as_ref()
             .map(|s| truncate_for_display(s, 50))
@@ -255,59 +393,66 @@ fn capture_via_primary_selection() -> Option<String> {
 
     let mut captured_text = None;
 
+    // Total attempts to trigger the shortcut
     for attempt in 1..=COPY_SHORTCUT_ATTEMPTS {
         eprintln!(
-            "⌨️  [Primary Selection] Triggering copy shortcut (attempt {}/{})...",
+            "âŒ¨ï¸  [Primary Selection] Triggering copy shortcut (attempt {}/{})...",
             attempt, COPY_SHORTCUT_ATTEMPTS
         );
         trigger_copy_shortcut();
-        let delay = COPY_RETRY_BASE_DELAY_MS
-            + COPY_RETRY_DELAY_STEP_MS.saturating_mul((attempt - 1) as u64);
-        std::thread::sleep(std::time::Duration::from_millis(delay));
 
-        let new_clipboard = clipboard.get_text().ok();
+        // Polling loop: check clipboard every 50ms for up to 400ms (increasing with attempts)
+        let poll_duration = Duration::from_millis(200 + (attempt as u64 * 100));
+        let start_time = Instant::now();
+        let poll_interval = Duration::from_millis(50);
 
-        eprintln!(
-            "📋 [Primary Selection] New clipboard (attempt {}/{}) : {:?}",
-            attempt,
-            COPY_SHORTCUT_ATTEMPTS,
-            new_clipboard.as_ref().map(|s| truncate_for_display(s, 50))
-        );
+        loop {
+            std::thread::sleep(poll_interval);
 
-        match (&original_clipboard, &new_clipboard) {
-            (Some(orig), Some(new)) if orig != new => {
-                eprintln!(
-                    "✅ [Primary Selection] Captured new text on attempt {}",
-                    attempt
-                );
-                captured_text = Some(new.clone());
-                break;
-            }
-            (None, Some(new)) if !new.trim().is_empty() => {
-                eprintln!(
-                    "✅ [Primary Selection] Captured new text on attempt {} (clipboard was empty)",
-                    attempt
-                );
-                captured_text = Some(new.clone());
-                break;
-            }
-            _ => {
-                if attempt == COPY_SHORTCUT_ATTEMPTS {
+            let new_clipboard = clipboard.get_text().ok();
+
+            match (&original_clipboard, &new_clipboard) {
+                (Some(orig), Some(new)) if orig != new => {
                     eprintln!(
-                        "❌ [Primary Selection] No new text after {} attempts (clipboard unchanged)",
-                        COPY_SHORTCUT_ATTEMPTS
+                        "âœ… [Primary Selection] Captured new text on attempt {} (took {:?})",
+                        attempt,
+                        start_time.elapsed()
                     );
+                    captured_text = Some(new.clone());
+                    break;
                 }
+                (None, Some(new)) if !new.trim().is_empty() => {
+                    eprintln!(
+                        "âœ… [Primary Selection] Captured new text on attempt {} (took {:?})",
+                        attempt,
+                        start_time.elapsed()
+                    );
+                    captured_text = Some(new.clone());
+                    break;
+                }
+                _ => {}
             }
+
+            if start_time.elapsed() > poll_duration {
+                eprintln!(
+                    "â³ [Primary Selection] Timeout waiting for clipboard change on attempt {}",
+                    attempt
+                );
+                break;
+            }
+        }
+
+        if captured_text.is_some() {
+            break;
         }
     }
 
     if let Some(original) = original_clipboard {
         let _ = clipboard.set_text(original);
-        eprintln!("🔄 [Primary Selection] Restored original clipboard");
+        eprintln!("ðŸ”„ [Primary Selection] Restored original clipboard");
     } else {
         let _ = clipboard.clear();
-        eprintln!("🔄 [Primary Selection] Cleared clipboard (was empty)");
+        eprintln!("ðŸ”„ [Primary Selection] Cleared clipboard (was empty)");
     }
 
     captured_text.filter(|text| !text.trim().is_empty())
@@ -317,7 +462,7 @@ fn capture_via_primary_selection() -> Option<String> {
 fn capture_via_primary_selection() -> Option<String> {
     use arboard::{Clipboard, GetExtLinux, LinuxClipboardKind};
 
-    eprintln!("🔍 [Primary Selection] Reading from Linux primary selection...");
+    eprintln!("ðŸ” [Primary Selection] Reading from Linux primary selection...");
     let mut clipboard = Clipboard::new().ok()?;
 
     match clipboard
@@ -327,11 +472,11 @@ fn capture_via_primary_selection() -> Option<String> {
     {
         Ok(text) => {
             if text.trim().is_empty() {
-                eprintln!("❌ [Primary Selection] Primary selection was empty");
+                eprintln!("âŒ [Primary Selection] Primary selection was empty");
                 None
             } else {
                 eprintln!(
-                    "✅ [Primary Selection] Captured text from primary selection: {}",
+                    "âœ… [Primary Selection] Captured text from primary selection: {}",
                     truncate_for_display(&text, 50)
                 );
                 Some(text)
@@ -339,7 +484,7 @@ fn capture_via_primary_selection() -> Option<String> {
         }
         Err(err) => {
             eprintln!(
-                "❌ [Primary Selection] Failed to read primary selection via arboard: {}",
+                "âŒ [Primary Selection] Failed to read primary selection via arboard: {}",
                 err
             );
             None
@@ -388,7 +533,7 @@ fn capture_via_macos_accessibility() -> Option<String> {
 
     if !output.status.success() {
         eprintln!(
-            "❌ [Capture] Accessibility script failed with status: {}",
+            "âŒ [Capture] Accessibility script failed with status: {}",
             output.status
         );
         return None;
