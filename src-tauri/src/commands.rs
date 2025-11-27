@@ -8,11 +8,11 @@ use crate::{
     shortcuts::register_shortcuts,
     translation::{TranslationRequest, TranslationResult},
 };
-use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::Emitter;
 use tauri::{AppHandle, Manager, State};
+use crate::http_client::http_client;
 
 type ScreenshotImage = screenshots::image::ImageBuffer<screenshots::image::Rgba<u8>, Vec<u8>>;
 
@@ -342,8 +342,7 @@ pub async fn fetch_available_models(
     let normalized_base = trimmed_base.trim_end_matches('/');
     let endpoint = format!("{}/models", normalized_base);
 
-    let client = Client::new();
-    let response = client
+    let response = http_client()
         .get(&endpoint)
         .header("Authorization", format!("Bearer {}", trimmed_key))
         .header("Content-Type", "application/json")

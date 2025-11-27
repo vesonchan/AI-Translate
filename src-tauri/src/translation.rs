@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::http_client::http_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslationRequest {
@@ -124,7 +125,7 @@ impl Translator {
         &self,
         request: &TranslationRequest,
     ) -> Result<TranslationResponse, String> {
-        let client = reqwest::Client::new();
+        let client = http_client();
 
         println!(
             "开始请求大模型翻译从 {} 到 {}.",

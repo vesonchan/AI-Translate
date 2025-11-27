@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
+use crate::http_client::http_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrRequest {
@@ -36,7 +37,7 @@ impl OcrService {
             request.image_format, base64_image
         );
 
-        let client = reqwest::Client::new();
+        let client = http_client();
         println!(
             "正在发送OCR请求...{}, 模型:{}",
             self.base_url, self.model_id

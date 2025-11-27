@@ -7,6 +7,7 @@ mod platform;
 mod shortcuts;
 mod system_tray;
 mod translation;
+mod http_client;
 
 use app_state::AppState;
 #[cfg(not(target_os = "macos"))]
