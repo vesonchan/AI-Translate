@@ -1,13 +1,13 @@
 mod app_state;
 mod commands;
 mod database;
+mod http_client;
 mod ocr;
 mod ocr_tasks;
 mod platform;
 mod shortcuts;
 mod system_tray;
 mod translation;
-mod http_client;
 
 use app_state::AppState;
 #[cfg(not(target_os = "macos"))]
@@ -19,6 +19,7 @@ use commands::{
     search_history, set_ocr_result, start_area_selection, translate_text,
 };
 use database::Database;
+use http_client::configure_http_client;
 #[cfg(target_os = "macos")]
 use platform::submit_area_for_ocr;
 use shortcuts::register_shortcuts;
@@ -26,7 +27,6 @@ use std::sync::Mutex;
 use system_tray::setup_system_tray;
 use tauri::Manager;
 use translation::{get_supported_languages, TranslationService};
-use http_client::configure_http_client;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

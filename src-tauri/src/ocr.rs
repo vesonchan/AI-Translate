@@ -1,6 +1,6 @@
+use crate::http_client::http_client;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use crate::http_client::http_client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrRequest {

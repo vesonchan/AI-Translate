@@ -1,3 +1,4 @@
+use crate::http_client::{configure_http_client, http_client, validate_http_client};
 #[cfg(not(target_os = "macos"))]
 use crate::system_tray::show_main_window;
 use crate::{
@@ -12,7 +13,6 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::Emitter;
 use tauri::{AppHandle, Manager, State};
-use crate::http_client::{configure_http_client, http_client, validate_http_client};
 
 type ScreenshotImage = screenshots::image::ImageBuffer<screenshots::image::Rgba<u8>, Vec<u8>>;
 
@@ -227,8 +227,7 @@ pub async fn get_api_key(
 
 #[tauri::command]
 pub async fn save_app_config(config: AppConfig, state: State<'_, AppState>) -> Result<(), String> {
-    validate_http_client(Some(&config.proxy))
-        .map_err(|e| format!("验证代理配置失败: {}", e))?;
+    validate_http_client(Some(&config.proxy)).map_err(|e| format!("验证代理配置失败: {}", e))?;
 
     {
         let db = state
@@ -240,8 +239,7 @@ pub async fn save_app_config(config: AppConfig, state: State<'_, AppState>) -> R
             .map_err(|e| format!("保存应用配置失败: {}", e))?;
     }
 
-    configure_http_client(Some(&config.proxy))
-        .map_err(|e| format!("应用代理配置失败: {}", e))
+    configure_http_client(Some(&config.proxy)).map_err(|e| format!("应用代理配置失败: {}", e))
 }
 
 #[tauri::command]

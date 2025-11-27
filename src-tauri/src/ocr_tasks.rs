@@ -2,12 +2,53 @@ use crate::{
     app_state::AppState,
     ocr::{OcrRequest, OcrService},
 };
+use image::{imageops::FilterType, GenericImageView, ImageFormat};
+use std::io::Cursor;
 use tauri::State;
+
+const MIN_OCR_DIMENSION: u32 = 28;
+
+fn ensure_minimum_ocr_size(image_data: Vec<u8>) -> Result<Vec<u8>, String> {
+    let image =
+        image::load_from_memory(&image_data).map_err(|e| format!("解析OCR图片失败: {}", e))?;
+    let (width, height) = image.dimensions();
+
+    if width == 0 || height == 0 {
+        return Err("截图区域太小，无法进行OCR".to_string());
+    }
+
+    if width >= MIN_OCR_DIMENSION && height >= MIN_OCR_DIMENSION {
+        return Ok(image_data);
+    }
+
+    let scale = f32::max(
+        MIN_OCR_DIMENSION as f32 / width as f32,
+        MIN_OCR_DIMENSION as f32 / height as f32,
+    );
+
+    let target_width = (width as f32 * scale).ceil() as u32;
+    let target_height = (height as f32 * scale).ceil() as u32;
+    let resized = image.resize_exact(target_width, target_height, FilterType::CatmullRom);
+
+    let mut buffer = Vec::new();
+    resized
+        .write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
+        .map_err(|e| format!("编码OCR图片失败: {}", e))?;
+
+    println!(
+        "OCR截图尺寸过小 ({}x{}), 已缩放至 {}x{}",
+        width, height, target_width, target_height
+    );
+
+    Ok(buffer)
+}
 
 pub async fn run_ocr_on_image_data(
     image_data: Vec<u8>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
+    let processed_image_data = ensure_minimum_ocr_size(image_data)?;
+
     let (api_key, base_url, model_id) = {
         let db = state
             .db
@@ -48,7 +89,7 @@ pub async fn run_ocr_on_image_data(
 
     let ocr_service = OcrService::new(api_key, base_url, model_id);
     let ocr_request = OcrRequest {
-        image_data,
+        image_data: processed_image_data,
         image_format: "png".to_string(),
     };
 

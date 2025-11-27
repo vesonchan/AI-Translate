@@ -102,7 +102,5 @@ pub fn configure_http_client(proxy: Option<&ProxyConfig>) -> Result<(), String> 
 }
 
 pub fn validate_http_client(proxy: Option<&ProxyConfig>) -> Result<(), String> {
-    build_client(proxy)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    build_client(proxy).map(|_| ()).map_err(|e| e.to_string())
 }
