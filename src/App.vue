@@ -125,6 +125,8 @@ const tempConfig = ref(createDefaultConfig());
 const hasChanges = ref(false);
 const isSaving = ref(false);
 const saveMessage = ref("");
+const copyMessage = ref(null);
+let copyMessageTimer = null;
 
 // 输入框引用
 const inputTextarea = ref(null);
@@ -265,15 +267,82 @@ const clearInput = () => {
   autoResize();
 };
 
+const showCopyResultMessage = (text, type = 'success') => {
+  copyMessage.value = { text, type };
+  if (copyMessageTimer) {
+    clearTimeout(copyMessageTimer);
+  }
+  copyMessageTimer = setTimeout(() => {
+    copyMessage.value = null;
+    copyMessageTimer = null;
+  }, 2000);
+};
+
+const extractWords = (text) => {
+  if (!text) return [];
+  return (text.match(/[A-Za-z0-9]+/g) || []).filter(Boolean);
+};
+
+const toSnakeCase = (text) => {
+  const words = extractWords(text);
+  if (!words.length) return '';
+  return words.map((word) => word.toLowerCase()).join('_');
+};
+
+const toCamelCase = (text) => {
+  const words = extractWords(text);
+  if (!words.length) return '';
+  const [first, ...rest] = words;
+  return [
+    first.toLowerCase(),
+    ...rest.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+  ].join('');
+};
+
 // 复制结果
 const copyResult = async () => {
   if (!translatedText.value) return;
   
   try {
     await navigator.clipboard.writeText(translatedText.value);
-    // 可以添加提示信息
+    showCopyResultMessage('复制成功');
   } catch (error) {
     console.error("复制失败:", error);
+    showCopyResultMessage('复制失败', 'error');
+  }
+};
+
+const copySnakeCaseResult = async () => {
+  if (!translatedText.value) return;
+  const snakeText = toSnakeCase(translatedText.value);
+  if (!snakeText) {
+    showCopyResultMessage('无法生成蛇形命名', 'error');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(snakeText);
+    showCopyResultMessage('复制蛇形成功');
+  } catch (error) {
+    console.error('复制蛇形失败:', error);
+    showCopyResultMessage('复制蛇形失败', 'error');
+  }
+};
+
+const copyCamelCaseResult = async () => {
+  if (!translatedText.value) return;
+  const camelText = toCamelCase(translatedText.value);
+  if (!camelText) {
+    showCopyResultMessage('无法生成驼峰命名', 'error');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(camelText);
+    showCopyResultMessage('复制驼峰成功');
+  } catch (error) {
+    console.error('复制驼峰失败:', error);
+    showCopyResultMessage('复制驼峰失败', 'error');
   }
 };
 
@@ -542,10 +611,11 @@ const checkChanges = () => {
 // 历史记录相关函数
 const clearHistory = async () => {
   try {
-    await invoke("clear_translation_history");
+    await invoke("clear_history");
     translationHistory.value = [];
   } catch (error) {
     console.error("清空历史记录失败:", error);
+    alert(`清空历史记录失败: ${error}`)
   }
 };
 
@@ -630,6 +700,10 @@ onMounted(async () => {
 onUnmounted(() => {
   // 移除键盘事件监听器
   document.removeEventListener('keydown', handleKeydown);
+  if (copyMessageTimer) {
+    clearTimeout(copyMessageTimer);
+    copyMessageTimer = null;
+  }
 });
 </script>
 
@@ -669,7 +743,10 @@ onUnmounted(() => {
       <TranslationResult
         :translated-text="translatedText"
         :is-translating="isTranslating"
+        :copy-message="copyMessage"
         @copy="copyResult"
+        @copy-snake="copySnakeCaseResult"
+        @copy-camel="copyCamelCaseResult"
       />
     </div>
 

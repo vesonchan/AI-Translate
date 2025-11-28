@@ -59,13 +59,26 @@
       </div>
       
       <div class="modal-footer">
-        <button 
-          class="btn btn-secondary" 
-          @click="$emit('clear-history')"
-          :disabled="history.length === 0"
-        >
-          清空历史
-        </button>
+        <div class="footer-left">
+          <button 
+            class="btn btn-secondary clear-btn" 
+            :class="{ 'confirming': confirmingClear }"
+            @click="handleClearClick"
+            :disabled="history.length === 0"
+          >
+            {{ confirmingClear ? '确认清空' : '清空历史' }}
+          </button>
+          <button 
+            v-if="confirmingClear" 
+            class="btn btn-tertiary cancel-btn" 
+            @click="cancelClearConfirmation"
+          >
+            取消
+          </button>
+          <span v-if="confirmingClear" class="clear-confirm-hint">
+            请在 {{ confirmCountdown }} 秒内再次点击确认
+          </span>
+        </div>
         <button class="btn btn-primary" @click="$emit('close')">
           关闭
         </button>
@@ -75,12 +88,86 @@
 </template>
 
 <script setup>
-defineProps({
+import { onBeforeUnmount, ref, watch } from 'vue'
+
+const props = defineProps({
   show: Boolean,
-  history: Array
+  history: {
+    type: Array,
+    default: () => []
+  }
 })
 
-defineEmits(['close', 'clear-history', 'copy-history', 'use-history'])
+const emit = defineEmits(['close', 'clear-history', 'copy-history', 'use-history'])
+
+const confirmingClear = ref(false)
+const confirmCountdown = ref(0)
+let confirmTimer = null
+
+const clearConfirmTimer = () => {
+  if (confirmTimer) {
+    clearInterval(confirmTimer)
+    confirmTimer = null
+  }
+}
+
+const resetConfirmState = () => {
+  confirmingClear.value = false
+  confirmCountdown.value = 0
+  clearConfirmTimer()
+}
+
+const startConfirmCountdown = () => {
+  resetConfirmState()
+  confirmingClear.value = true
+  confirmCountdown.value = 5
+
+  const tick = () => {
+    confirmCountdown.value = Math.max(0, confirmCountdown.value - 1)
+    if (confirmCountdown.value === 0) {
+      resetConfirmState()
+    }
+  }
+
+  const setIntervalFn = typeof window !== 'undefined' && window.setInterval ? window.setInterval : setInterval
+  confirmTimer = setIntervalFn(tick, 1000)
+}
+
+const handleClearClick = () => {
+  if (!props.history || props.history.length === 0) {
+    return
+  }
+
+  if (!confirmingClear.value) {
+    startConfirmCountdown()
+    return
+  }
+
+  emit('clear-history')
+  resetConfirmState()
+}
+
+const cancelClearConfirmation = () => {
+  if (confirmingClear.value) {
+    resetConfirmState()
+  }
+}
+
+watch(() => props.show, (visible) => {
+  if (!visible) {
+    resetConfirmState()
+  }
+})
+
+watch(() => props.history?.length, (length) => {
+  if (!length) {
+    resetConfirmState()
+  }
+})
+
+onBeforeUnmount(() => {
+  resetConfirmState()
+})
 
 const parseTimestamp = (timestamp) => {
   if (!timestamp) return null
@@ -294,6 +381,13 @@ const formatTime = (timestamp) => {
   border-top: 1px solid #e5e7eb;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
 .btn {
   padding: 8px 16px;
   border: none;
@@ -325,6 +419,35 @@ const formatTime = (timestamp) => {
 
 .btn-primary:hover {
   background: #2563eb;
+}
+
+.clear-btn.confirming {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.clear-btn.confirming:hover {
+  background: #fecaca;
+}
+
+.btn-tertiary {
+  background: #ffffff;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.btn-tertiary:hover {
+  background: #f9fafb;
+}
+
+.cancel-btn {
+  padding: 8px 12px;
+}
+
+.clear-confirm-hint {
+  font-size: 12px;
+  color: #b91c1c;
 }
 
 @media (max-width: 768px) {
