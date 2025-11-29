@@ -303,6 +303,17 @@
               </button>
             </div>
             <div class="card-body">
+              <div class="version-info">
+                <div class="version-row">
+                  <span class="version-label">当前版本</span>
+                  <span class="version-value">{{ currentVersion || '加载中...' }}</span>
+                </div>
+                <div class="version-row">
+                  <span class="version-label">服务器版本</span>
+                  <span class="version-value">{{ latestVersionDisplay }}</span>
+                </div>
+              </div>
+
               <div class="update-status-line">
                 <span :class="['update-status-pill', updateStatusClass]">
                   {{ updateStatusMessage }}
@@ -459,6 +470,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { relaunch } from '@tauri-apps/plugin-process'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import { check as checkForAppUpdates } from '@tauri-apps/plugin-updater'
 import HotkeyRecorder from './HotkeyRecorder.vue'
 import ModelSelectorModal from './ModelSelectorModal.vue'
@@ -547,6 +559,8 @@ const updateProgress = ref(0)
 const availableUpdateInfo = ref(null)
 const totalDownloadBytes = ref(0)
 const downloadedBytes = ref(0)
+const latestServerVersion = ref('')
+const hasCheckedForUpdates = ref(false)
 let pendingUpdate = null
 const proxyPlaceholder = computed(() => {
   const mode = localConfig.value?.proxy?.mode
@@ -615,6 +629,22 @@ const updateProgressLabel = computed(() => {
   return `下载进度：${updateProgress.value}%`
 })
 
+const latestVersionDisplay = computed(() => {
+  if (isCheckingUpdate.value) {
+    return '检查中...'
+  }
+  if (latestServerVersion.value) {
+    return latestServerVersion.value
+  }
+  if (!hasCheckedForUpdates.value) {
+    return '未检查'
+  }
+  if (updateError.value) {
+    return '获取失败'
+  }
+  return currentVersion.value || '未知'
+})
+
 const formatBytes = (bytes) => {
   if (!bytes || Number.isNaN(bytes)) {
     return '0 MB'
@@ -673,6 +703,8 @@ const runUpdateCheck = async () => {
   updateProgress.value = 0
   availableUpdateInfo.value = null
   updateState.value = 'checking'
+  hasCheckedForUpdates.value = false
+  latestServerVersion.value = ''
 
   try {
     const update = await checkForAppUpdates()
@@ -684,14 +716,21 @@ const runUpdateCheck = async () => {
         notes: (update.body || '').trim(),
         date: formatUpdateDate(update.date)
       }
+      latestServerVersion.value = update.version || ''
       updateState.value = 'available'
     } else {
       await disposePendingUpdate()
+      latestServerVersion.value = currentVersion.value || ''
       updateState.value = 'up-to-date'
     }
   } catch (error) {
     updateError.value = parseErrorMessage(error)
     updateState.value = 'error'
+  } finally {
+    hasCheckedForUpdates.value = true
+    if (!latestServerVersion.value && !updateError.value) {
+      latestServerVersion.value = currentVersion.value || ''
+    }
   }
 }
 
@@ -704,6 +743,21 @@ const handleManualUpdateCheck = async () => {
 
 const downloadAndInstallUpdate = async () => {
   if (!pendingUpdate || isInstallingUpdate.value) {
+    return
+  }
+
+  const versionForConfirm = pendingUpdate.version || availableUpdateInfo.value?.version || ''
+  const shouldInstall = await confirm(
+    `检测到新版本${versionForConfirm ? ` v${versionForConfirm}` : ''}，是否立即下载并安装？`,
+    {
+      title: '确认更新',
+      type: 'info',
+      okLabel: '立即更新',
+      cancelLabel: '暂不'
+    }
+  )
+
+  if (!shouldInstall) {
     return
   }
 
@@ -1193,6 +1247,29 @@ const saveSettings = () => {
   margin: 4px 0 0;
   font-size: 13px;
   color: #6b7280;
+}
+
+.version-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.version-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #374151;
+}
+
+.version-label {
+  color: #6b7280;
+}
+
+.version-value {
+  font-weight: 600;
+  color: #111827;
 }
 
 .card-badge {

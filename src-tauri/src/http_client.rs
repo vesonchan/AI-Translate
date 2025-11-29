@@ -1,6 +1,18 @@
 use crate::database::{ProxyConfig, ProxyMode};
 use reqwest::{Client, ClientBuilder, Proxy};
 use std::sync::{OnceLock, RwLock};
+use std::env;
+
+const PROXY_ENV_KEYS: [&str; 6] = [
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+];
+
+static ORIGINAL_PROXY_ENV: OnceLock<Vec<(String, Option<String>)>> = OnceLock::new();
 
 static HTTP_CLIENT: OnceLock<RwLock<Client>> = OnceLock::new();
 
@@ -84,6 +96,78 @@ fn env_proxy_value(keys: &[&str]) -> Option<String> {
     None
 }
 
+fn capture_original_proxy_env() -> &'static Vec<(String, Option<String>)> {
+    ORIGINAL_PROXY_ENV.get_or_init(|| {
+        PROXY_ENV_KEYS
+            .iter()
+            .map(|key| (key.to_string(), env::var(key).ok()))
+            .collect()
+    })
+}
+
+fn clear_runtime_proxy_env() {
+    for key in PROXY_ENV_KEYS {
+        env::remove_var(key);
+    }
+}
+
+fn restore_proxy_environment() {
+    let original = capture_original_proxy_env();
+    for (key, value) in original {
+        match value {
+            Some(val) => env::set_var(key, val),
+            None => env::remove_var(key),
+        }
+    }
+}
+
+fn set_proxy_env_var(key: &str, value: &str) {
+    if value.is_empty() {
+        env::remove_var(key);
+    } else {
+        env::set_var(key, value);
+    }
+}
+
+fn apply_proxy_environment(proxy: Option<&ProxyConfig>) {
+    capture_original_proxy_env();
+
+    let Some(config) = proxy else {
+        clear_runtime_proxy_env();
+        return;
+    };
+
+    if !config.enabled {
+        clear_runtime_proxy_env();
+        return;
+    }
+
+    if matches!(config.mode, ProxyMode::System) {
+        restore_proxy_environment();
+        return;
+    }
+
+    let server = config.server.trim();
+    if server.is_empty() {
+        clear_runtime_proxy_env();
+        return;
+    }
+
+    clear_runtime_proxy_env();
+    set_proxy_env_var("HTTP_PROXY", server);
+    set_proxy_env_var("http_proxy", server);
+    set_proxy_env_var("HTTPS_PROXY", server);
+    set_proxy_env_var("https_proxy", server);
+
+    if matches!(config.mode, ProxyMode::Socks5) {
+        set_proxy_env_var("ALL_PROXY", server);
+        set_proxy_env_var("all_proxy", server);
+    } else {
+        env::remove_var("ALL_PROXY");
+        env::remove_var("all_proxy");
+    }
+}
+
 pub fn http_client() -> Client {
     client_lock()
         .read()
@@ -93,6 +177,7 @@ pub fn http_client() -> Client {
 
 pub fn configure_http_client(proxy: Option<&ProxyConfig>) -> Result<(), String> {
     let client = build_client(proxy).map_err(|e| e.to_string())?;
+    apply_proxy_environment(proxy);
     if let Ok(mut guard) = client_lock().write() {
         *guard = client;
         Ok(())
