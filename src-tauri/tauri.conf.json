@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "prism",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "identifier": "com.qyzhg.prism",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -35,7 +35,7 @@
       "endpoints": [
         "https://github.com/qyzhg/prism/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI4NTUyRUJCNEY0OUMwRjcKUldUM3dFbFB1eTVWdUNWV0hPZnR4RjRmVkcvUHRjcTljVERZUkVOZ3N4OFRTMmswclZTa0NTVjIK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhGN0Y2RkFBRDU4NjcyN0IKUldSN2NvYlZxbTkvajh5TVBPK2lpN0Q0SWNyR2pUeE5WQi8vcHhENEtjQVJxSFI2TWduK09nT2cK"
     }
   },
   "bundle": {
