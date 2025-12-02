@@ -6,7 +6,7 @@
 
 🚀 Una potente aplicación de traducción multiplataforma impulsada por modelos de lenguaje avanzados y tecnología OCR.
 
-[Descarga](#descarga) • [Funciones](#funciones) • [Inicio-rápido](#inicio-rápido) • [Documentación](#documentación)
+[Descarga](#descarga) • [Funciones](#funciones) • [Inicio rápido](#inicio-rápido) • [Documentación](#documentación)
 
 </div>
 
@@ -56,7 +56,7 @@
 
 ---
 
-## Inicio-rápido
+## Inicio rápido
 
 ### Requisitos previos
 
