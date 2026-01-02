@@ -103,10 +103,15 @@ const copyMessageStatusClass = computed(() => {
 
 <style scoped>
 .translation-result {
-  background: white;
-  border-radius: 8px;
+  background: var(--mac-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid var(--mac-border);
   padding: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
 }
 
 .result-header {
@@ -117,93 +122,92 @@ const copyMessageStatusClass = computed(() => {
 }
 
 .result-label {
+  font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--mac-text);
+  letter-spacing: -0.01em;
 }
 
 .result-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .action-btn {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  color: #374151;
+  background: var(--mac-btn-bg);
+  border: 1px solid var(--mac-toolbar-border);
+  color: var(--mac-text);
   cursor: pointer;
-  padding: 3px 6px;
-  border-radius: 4px;
-  transition: all 0.2s;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font-size: 11px;
-  line-height: 1;
-}
-
-.action-btn svg {
-  flex-shrink: 0;
-}
-
-.action-btn span {
-  font-weight: 500;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #e5edff;
-  border-color: #c3d4ff;
-  color: #1d4ed8;
+  background: var(--mac-card);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  color: var(--mac-accent);
 }
 
 .action-btn:disabled {
-  opacity: 0.55;
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #9ca3af;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .copy-message {
-  font-size: 12px;
+  font-size: 11px;
   margin-bottom: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   width: fit-content;
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .copy-message--success {
-  background: #ecfdf5;
-  color: #047857;
+  background: rgba(52, 199, 89, 0.1);
+  color: #34c759;
 }
 
 .copy-message--error {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
 }
 
 .result-content {
-  height: 180px;
+  height: 200px;
   position: relative;
   overflow: hidden;
 }
 
 .loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  color: #6b7280;
+  height: 100%;
+  gap: 12px;
+  color: var(--mac-text);
   font-size: 14px;
 }
 
 .loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #e5e7eb;
-  border-top: 2px solid #3b82f6;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(0, 122, 255, 0.1);
+  border-top: 3px solid var(--mac-accent);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes spin {
@@ -212,22 +216,37 @@ const copyMessageStatusClass = computed(() => {
 }
 
 .result-text {
-  color: #374151;
+  color: var(--mac-text);
   line-height: 1.6;
+  font-size: 15px;
   white-space: pre-wrap;
   word-wrap: break-word;
   height: 100%;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 6px;
+}
+
+.result-text::-webkit-scrollbar {
+  width: 4px;
+}
+
+.result-text::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+[data-theme='dark'] .result-text::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .placeholder {
-  color: #9ca3af;
-  font-style: italic;
+  color: var(--mac-text);
+  opacity: 0.3;
+  font-style: normal;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  min-height: 120px;
+  font-size: 14px;
 }
 </style>

@@ -15,6 +15,7 @@ import TranslationResult from './components/TranslationResult.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
 import HistoryModal from './components/HistoryModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import VoiceSettingsModal from './components/VoiceSettingsModal.vue'
 
 // 平台相关默认快捷键
 const isMacPlatform =
@@ -141,11 +142,25 @@ const isOcrProcessing = ref(false);
 const isPinned = ref(false);
 const showHistoryModal = ref(false);
 const showSettingsModal = ref(false);
+const showVoiceSettingsModal = ref(false);
+const voiceSettings = ref({
+  model: 'turbo',
+  language: 'auto',
+  recordingMode: 'toggle',
+  audioDevice: 'default'
+});
 const translationHistory = ref([]);
 const supportedLanguages = ref([]);
 const selectedFromLang = ref("auto");
 const selectedToLang = ref("auto");
 const selectedService = ref("openai");
+const selectedServiceType = ref("ai"); // 'ai' or 'google'
+const currentTheme = ref("light");
+
+const toggleTheme = () => {
+  currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', currentTheme.value);
+};
 
 // 设置相关数据
 const appConfig = ref(createDefaultConfig());
@@ -357,7 +372,7 @@ const translate = async () => {
       text: inputText.value,
       fromLanguage: fromLang,
       toLanguage: targetLang,
-      service: selectedService.value
+      service: selectedServiceType.value === 'google' ? 'google' : selectedService.value
     });
     
     translatedText.value = result.translated_text;
@@ -990,6 +1005,7 @@ onUnmounted(() => {
         v-model="inputText"
         :is-translating="isTranslating"
         :is-ocr-processing="isOcrProcessing"
+        :recording-mode="voiceSettings.recordingMode"
         @translate="translate"
         @paste="pasteText"
         @clear="clearInput"
@@ -1010,10 +1026,14 @@ onUnmounted(() => {
     <!-- 底部工具栏 -->
     <BottomToolbar
       :is-pinned="isPinned"
+      v-model:serviceType="selectedServiceType"
+      :theme="currentTheme"
       @toggle-pin="togglePin"
       @show-history="showHistory"
       @show-settings="showSettings"
+      @show-voice-settings="showVoiceSettingsModal = true"
       @start-ocr="areaScreenshot"
+      @toggle-theme="toggleTheme"
     />
 
     <!-- 历史记录模态框 -->
@@ -1041,21 +1061,57 @@ onUnmounted(() => {
       @check-changes="checkChanges"
       @on-translation-service-change="onTranslationServiceChange"
     />
+
+    <!-- 语音设置模态框 -->
+    <VoiceSettingsModal
+      :show="showVoiceSettingsModal"
+      @close="showVoiceSettingsModal = false"
+      @save="voiceSettings = $event"
+    />
   </div>
 </template>
 
 <style>
-/* 仅隐藏窗口滚动条，内部区域保持可滚动 */
-html,
-body {
-  overflow: hidden;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+/* 全局样式优化 */
+:root {
+  --mac-bg: rgba(245, 245, 247, 0.8);
+  --mac-card: rgba(255, 255, 255, 0.6);
+  --mac-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --mac-accent: #007aff;
+  --mac-text: #1d1d1f;
+  --mac-border: rgba(0, 0, 0, 0.1);
+  --mac-toolbar-bg: rgba(255, 255, 255, 0.7);
+  --mac-toolbar-border: rgba(0, 0, 0, 0.1);
+  --mac-btn-bg: rgba(255, 255, 255, 0.5);
+  --app-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
+[data-theme='dark'] {
+  --mac-bg: #1c1c1e;
+  --mac-card: #2c2c2e;
+  --mac-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  --mac-accent: #0a84ff;
+  --mac-text: #ffffff;
+  --mac-border: rgba(255, 255, 255, 0.12);
+  --mac-toolbar-bg: #1c1c1e;
+  --mac-toolbar-border: rgba(255, 255, 255, 0.1);
+  --mac-btn-bg: rgba(255, 255, 255, 0.1);
+  --app-gradient: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--app-gradient);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  transition: background 0.4s ease;
+}
+
+#app {
+  height: 100%;
 }
 </style>
 
@@ -1064,21 +1120,54 @@ body::-webkit-scrollbar {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f5f5f5;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  border-radius: 12px;
+  background: transparent;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
   overflow: hidden;
+  box-shadow: var(--mac-shadow);
+  border: 1px solid var(--mac-border);
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 装饰性背景 */
+.app-container::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(0, 122, 255, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme='dark'] .app-container::before {
+  background: radial-gradient(circle, rgba(0, 122, 255, 0.1) 0%, transparent 60%);
 }
 
 /* 主内容区 */
 .main-content {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  overflow: hidden; /* Hide scrollbar */
-  /* Space for bottom toolbar */
-  padding: 12px 12px 60px;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 16px 16px 80px; /* 为底部工具栏预留空间 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.main-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
 }
 
 /* 通用样式 */

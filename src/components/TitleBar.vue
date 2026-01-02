@@ -1,6 +1,6 @@
 <template>
   <div class="title-bar" data-tauri-drag-region>
-    <div class="title">Prism</div>
+    <div class="title">AI-Translate</div>
     <div class="window-controls" data-tauri-drag-region="false">
       <button class="control-btn close" data-tauri-drag-region="false" @click="$emit('close')">
         <svg width="12" height="12" viewBox="0 0 12 12">
@@ -22,11 +22,12 @@ defineEmits(['close'])
   justify-content: space-between;
   align-items: center;
   padding: 8px 16px;
-  background: white;
-  color: #1f2937;
+  background: var(--mac-toolbar-bg);
+  color: var(--mac-text);
   font-weight: 500;
   user-select: none;
   -webkit-app-region: drag;
+  border-bottom: 1px solid var(--mac-toolbar-border);
 }
 
 .window-controls {
@@ -40,21 +41,24 @@ defineEmits(['close'])
   height: 24px;
   border: none;
   border-radius: 4px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--mac-btn-bg);
+  color: var(--mac-text);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  opacity: 0.7;
 }
 
 .control-btn:hover {
-  background: #e5e7eb;
+  background: var(--mac-card);
+  opacity: 1;
 }
 
 .control-btn.close:hover {
   background: #ff5f56;
   color: white;
+  opacity: 1;
 }
 </style>

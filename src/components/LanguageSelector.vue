@@ -108,8 +108,17 @@ watch(
 .language-selector {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: 12px;
+  margin-bottom: 4px;
+  background: var(--mac-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mac-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 100;
 }
 
 .lang-group {
@@ -117,48 +126,35 @@ watch(
   min-width: 0;
 }
 
-.lang-select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.lang-select:hover {
-  border-color: #007bff;
-}
-
-.lang-select:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
 .swap-btn {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
+  padding: 6px;
+  border: none;
+  border-radius: 8px;
+  background: var(--mac-btn-bg);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  color: var(--mac-text);
+  border: 1px solid var(--mac-toolbar-border);
 }
 
 .swap-btn:hover {
-  background: #f8f9fa;
-  border-color: #007bff;
+  background: var(--mac-card);
+  transform: rotate(180deg) scale(1.1);
+  color: var(--mac-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .swap-btn:active {
-  transform: scale(0.95);
+  transform: rotate(180deg) scale(0.95);
 }
 
+.swap-btn svg {
+  transition: transform 0.4s ease;
+}
 </style>

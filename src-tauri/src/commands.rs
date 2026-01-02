@@ -8,12 +8,12 @@ use crate::{
     platform,
     shortcuts::register_shortcuts,
     token_limits::calculate_text_response_tokens,
-    translation::{TranslationRequest, TranslationResult},
+    translation::{TranslationRequest, TranslationResult, TranslationService},
 };
 use serde::Serialize;
 use serde_json::Value;
 use tauri::Emitter;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, Window};
 
 type ScreenshotImage = screenshots::image::ImageBuffer<screenshots::image::Rgba<u8>, Vec<u8>>;
 
@@ -48,46 +48,44 @@ pub async fn translate_text(
     text: String,
     from_language: Option<String>,
     to_language: String,
-    _service: String,
+    service: String,
     state: State<'_, AppState>,
 ) -> Result<TranslationResult, String> {
     let from_lang_value = from_language.unwrap_or_default();
     let to_lang_value = to_language;
 
-    let translation_service = {
-        let service = state
-            .translation_service
-            .lock()
-            .map_err(|e| format!("获取翻译服务失败: {}", e))?;
-        service.clone()
-    };
-
-    let (api_key, base_url, model_id, token_config) = {
+    // 根据前端传入的 service 参数决定使用哪个服务
+    // 如果 service 是 "google"，则直接使用 Google 翻译
+    // 否则根据数据库配置使用 AI 服务
+    let (target_service, api_key, base_url, model_id, token_config): (TranslationService, String, String, String, TokenLimitConfig) = {
         let db = state
             .db
             .lock()
             .map_err(|e| format!("获取数据库连接失败: {}", e))?;
 
-        match db.get_app_config() {
-            Ok(Some(config)) => {
-                let token_config = config.token_limits.clone();
-                let translation_config = config.translation;
-                (
-                    translation_config.api_key,
-                    translation_config.base_url,
-                    translation_config.model_id,
-                    token_config,
-                )
-            }
-            Ok(None) => (
+        let config = db.get_app_config()
+            .map_err(|e| format!("获取应用配置失败: {}", e))?
+            .ok_or_else(|| "无法获取配置".to_string())?;
+
+        let token_config = config.token_limits.clone();
+        
+        if service == "google" {
+            (
+                TranslationService::Google,
                 "".to_string(),
-                "https://api.openai.com/v1".to_string(),
-                "gpt-5-nano".to_string(),
-                TokenLimitConfig::default(),
-            ),
-            Err(e) => {
-                return Err(format!("获取应用配置失败: {}", e));
-            }
+                "".to_string(),
+                "".to_string(),
+                token_config,
+            )
+        } else {
+            let translation_config = config.translation;
+            (
+                TranslationService::OpenAI,
+                translation_config.api_key,
+                translation_config.base_url,
+                translation_config.model_id,
+                token_config,
+            )
         }
     };
 
@@ -99,7 +97,7 @@ pub async fn translate_text(
         max_tokens,
     };
 
-    translation_service
+    target_service
         .translate(request, &api_key, &base_url, &model_id)
         .await
 }
@@ -577,4 +575,196 @@ pub async fn capture_and_ocr(state: State<'_, AppState>) -> Result<String, Strin
     let buffer = encode_image_to_png(&image)?;
 
     run_ocr_on_image_data(buffer, state).await
+}
+
+// ============================================================================
+// Speech-to-Text Commands
+// ============================================================================
+
+use crate::speech::{AudioRecorder, ModelManager, WhisperEngine};
+use crate::speech::whisper::WhisperModel;
+use crate::speech::model_manager::ModelStatus;
+use std::sync::OnceLock;
+
+// Global speech state (using OnceLock for lazy initialization)
+static AUDIO_RECORDER: OnceLock<std::sync::Mutex<Option<AudioRecorder>>> = OnceLock::new();
+static WHISPER_ENGINE: OnceLock<std::sync::Mutex<WhisperEngine>> = OnceLock::new();
+static MODEL_MANAGER: OnceLock<ModelManager> = OnceLock::new();
+
+fn get_audio_recorder() -> &'static std::sync::Mutex<Option<AudioRecorder>> {
+    AUDIO_RECORDER.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn get_whisper_engine() -> &'static std::sync::Mutex<WhisperEngine> {
+    WHISPER_ENGINE.get_or_init(|| std::sync::Mutex::new(WhisperEngine::new()))
+}
+
+fn get_model_manager() -> &'static ModelManager {
+    MODEL_MANAGER.get_or_init(|| ModelManager::new().expect("Failed to create model manager"))
+}
+
+/// Get list of all available Whisper models with their download status
+#[tauri::command]
+pub fn get_speech_models() -> Vec<ModelStatus> {
+    get_model_manager().get_all_models_status()
+}
+
+/// Check if a specific model is downloaded
+#[tauri::command]
+pub fn is_model_downloaded(model: String) -> bool {
+    let model = match model.as_str() {
+        "tiny" => WhisperModel::Tiny,
+        "base" => WhisperModel::Base,
+        "small" => WhisperModel::Small,
+        "medium" => WhisperModel::Medium,
+        "turbo" => WhisperModel::Turbo,
+        "large" => WhisperModel::Large,
+        _ => return false,
+    };
+    get_model_manager().is_model_available(model)
+}
+
+/// Download a Whisper model
+#[tauri::command]
+pub async fn download_speech_model(
+    model: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    let model_enum = match model.as_str() {
+        "tiny" => WhisperModel::Tiny,
+        "base" => WhisperModel::Base,
+        "small" => WhisperModel::Small,
+        "medium" => WhisperModel::Medium,
+        "turbo" => WhisperModel::Turbo,
+        "large" => WhisperModel::Large,
+        _ => return Err("Invalid model name".to_string()),
+    };
+
+    let manager = get_model_manager();
+    let model_name = model.clone();
+    
+    // Run download in blocking task
+    tokio::task::spawn_blocking(move || {
+        manager.download_model(model_enum, |downloaded, total| {
+            let progress = if total > 0 {
+                (downloaded as f64 / total as f64 * 100.0) as u32
+            } else {
+                0
+            };
+            let _ = app.emit("speech-model-download-progress", serde_json::json!({
+                "model": model_name.clone(),
+                "downloaded": downloaded,
+                "total": total,
+                "progress": progress
+            }));
+        })
+    })
+    .await
+    .map_err(|e| format!("Download task failed: {}", e))?
+    .map_err(|e| format!("Model download failed: {}", e))
+}
+
+/// Load a Whisper model for transcription
+#[tauri::command]
+pub fn load_speech_model(model: String) -> Result<(), String> {
+    let model_enum = match model.as_str() {
+        "tiny" => WhisperModel::Tiny,
+        "base" => WhisperModel::Base,
+        "small" => WhisperModel::Small,
+        "medium" => WhisperModel::Medium,
+        "turbo" => WhisperModel::Turbo,
+        "large" => WhisperModel::Large,
+        _ => return Err("Invalid model name".to_string()),
+    };
+
+    let manager = get_model_manager();
+    let model_path = manager.get_model_path(model_enum);
+
+    if !model_path.exists() {
+        return Err("Model not downloaded".to_string());
+    }
+
+    let mut engine = get_whisper_engine().lock().unwrap();
+    engine.load_model(&model_path).map_err(|e| e.to_string())
+}
+
+/// Start audio recording
+#[tauri::command]
+pub fn start_speech_recording(app: AppHandle) -> Result<(), String> {
+    println!("DEBUG: start_speech_recording command received");
+    let _ = app.emit("backend-alert", "开始初始化录音...");
+    
+    let mut recorder_opt = get_audio_recorder().lock().unwrap();
+    
+    // Create recorder if not exists
+    if recorder_opt.is_none() {
+        println!("DEBUG: Initializing AudioRecorder...");
+        let _ = app.emit("backend-alert", "初始化音频设备...");
+        match AudioRecorder::new() {
+            Ok(recorder) => {
+                println!("DEBUG: AudioRecorder initialized successfully");
+                let _ = app.emit("backend-alert", "音频设备初始化成功");
+                *recorder_opt = Some(recorder);
+            }
+            Err(e) => {
+                println!("DEBUG: Failed to initialize AudioRecorder: {}", e);
+                let _ = app.emit("backend-alert", format!("音频设备初始化失败: {}", e));
+                return Err(e.to_string());
+            }
+        }
+    }
+
+    if let Some(ref mut recorder) = *recorder_opt {
+        println!("DEBUG: Starting recording on recorder instance");
+        recorder.start_recording().map_err(|e| {
+            println!("DEBUG: Failed to start recording: {}", e);
+            let _ = app.emit("backend-alert", format!("启动录音失败: {}", e));
+            e.to_string()
+        })?;
+        let _ = app.emit("backend-alert", "录音已开始！请说话...");
+        Ok(())
+    } else {
+        Err("Failed to initialize recorder".to_string())
+    }
+}
+
+/// Stop recording and transcribe
+#[tauri::command]
+pub fn stop_speech_recording() -> Result<String, String> {
+    let mut recorder_opt = get_audio_recorder().lock().unwrap();
+    
+    let samples = if let Some(ref mut recorder) = *recorder_opt {
+        recorder.stop_recording().map_err(|e| e.to_string())?
+    } else {
+        return Err("No active recording".to_string());
+    };
+
+    // Transcribe
+    let engine = get_whisper_engine().lock().unwrap();
+    if !engine.is_loaded() {
+        return Err("Whisper model not loaded".to_string());
+    }
+
+    engine.transcribe(&samples).map_err(|e| e.to_string())
+}
+
+/// Check if Whisper model is loaded
+#[tauri::command]
+pub fn is_speech_model_loaded() -> bool {
+    let engine = get_whisper_engine().lock().unwrap();
+    engine.is_loaded()
+}
+
+/// Get available audio input devices
+#[tauri::command]
+pub fn get_audio_devices() -> Result<Vec<String>, String> {
+    AudioRecorder::list_devices().map_err(|e| e.to_string())
+}
+
+/// Set speech language (use "auto" for auto-detection)
+#[tauri::command]
+pub fn set_speech_language(language: String) -> Result<(), String> {
+    let mut engine = get_whisper_engine().lock().unwrap();
+    engine.set_language(&language);
+    Ok(())
 }

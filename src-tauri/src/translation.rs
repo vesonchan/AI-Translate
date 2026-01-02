@@ -198,10 +198,57 @@ impl Translator {
 
     async fn translate_google(
         &self,
-        _request: &TranslationRequest,
+        request: &TranslationRequest,
     ) -> Result<TranslationResponse, String> {
-        // todo: 预留口子
-        Err("预留的,没实现呢".to_string())
+        let client = http_client();
+        
+        let from_lang = if request.from_lang == "auto" { "auto" } else { &request.from_lang };
+        let to_lang = &request.to_lang;
+
+        let url = "https://translate.googleapis.com/translate_a/single";
+        let params = [
+            ("client", "gtx"),
+            ("sl", from_lang),
+            ("tl", to_lang),
+            ("dt", "t"),
+            ("q", &request.text),
+        ];
+
+        let response = client
+            .get(url)
+            .query(&params)
+            .send()
+            .await
+            .map_err(|e| format!("请求谷歌翻译失败: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("谷歌翻译接口返回错误: {}", response.status()));
+        }
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("解析谷歌翻译响应失败: {}", e))?;
+
+        // 谷歌翻译返回的格式通常是 [[[ "译文", "原文", ... ], ...], ...]
+        let mut translated_text = String::new();
+        if let Some(sentences) = body.get(0).and_then(|v| v.as_array()) {
+            for sentence in sentences {
+                if let Some(part) = sentence.get(0).and_then(|v| v.as_str()) {
+                    translated_text.push_str(part);
+                }
+            }
+        }
+
+        if translated_text.is_empty() {
+            return Err("无法从谷歌翻译获取内容".to_string());
+        }
+
+        Ok(TranslationResponse {
+            translated_text,
+            source_lang: request.from_lang.clone(),
+            target_lang: request.to_lang.clone(),
+        })
     }
 
     async fn translate_baidu(

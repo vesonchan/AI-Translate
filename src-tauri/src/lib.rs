@@ -9,6 +9,7 @@ mod shortcuts;
 mod system_tray;
 mod translation;
 mod token_limits;
+mod speech;
 
 use app_state::AppState;
 #[cfg(not(target_os = "macos"))]
@@ -18,6 +19,10 @@ use commands::{
     fetch_available_models, get_api_key, get_app_config, get_setting, get_translation_history,
     reload_shortcuts, save_api_key, save_app_config, save_setting, save_translation,
     search_history, set_ocr_result, start_area_selection, translate_text,
+    // Speech commands
+    get_speech_models, is_model_downloaded, download_speech_model, load_speech_model,
+    start_speech_recording, stop_speech_recording, is_speech_model_loaded, get_audio_devices,
+    set_speech_language,
 };
 use database::Database;
 use http_client::configure_http_client;
@@ -101,7 +106,17 @@ pub fn run() {
             start_area_selection,
             set_ocr_result,
             get_supported_languages,
-            fetch_available_models
+            fetch_available_models,
+            // Speech-to-Text commands
+            get_speech_models,
+            is_model_downloaded,
+            download_speech_model,
+            load_speech_model,
+            start_speech_recording,
+            stop_speech_recording,
+            is_speech_model_loaded,
+            get_audio_devices,
+            set_speech_language
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

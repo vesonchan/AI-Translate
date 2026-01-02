@@ -223,7 +223,8 @@ const formatTime = (timestamp) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,61 +232,77 @@ const formatTime = (timestamp) => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--mac-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--mac-shadow);
+  border: 1px solid var(--mac-border);
+  color: var(--mac-text);
+  transition: all 0.3s ease;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mac-border);
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
 }
 
 .close-btn {
-  background: none;
+  background: var(--mac-btn-bg);
   border: none;
   padding: 8px;
   border-radius: 6px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--mac-text);
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--mac-card);
+  opacity: 1;
 }
 
 .modal-body {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 24px;
+  padding: 16px 20px;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--mac-border);
+  border-radius: 3px;
 }
 
 .empty-history {
   text-align: center;
   padding: 48px 24px;
-  color: #9ca3af;
+  opacity: 0.5;
 }
 
 .empty-history svg {
   margin-bottom: 16px;
-  opacity: 0.5;
 }
 
 .empty-history p {
@@ -300,8 +317,8 @@ const formatTime = (timestamp) => {
 }
 
 .history-item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--mac-card);
+  border: 1px solid var(--mac-border);
   border-radius: 8px;
   padding: 16px;
   display: flex;
@@ -311,8 +328,8 @@ const formatTime = (timestamp) => {
 }
 
 .history-item:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  border-color: var(--mac-accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .history-text {
@@ -321,16 +338,15 @@ const formatTime = (timestamp) => {
 }
 
 .source-text {
-  font-size: 14px;
-  color: #374151;
-  margin-bottom: 8px;
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 4px;
   line-height: 1.4;
   word-break: break-word;
 }
 
 .target-text {
   font-size: 14px;
-  color: #1f2937;
   font-weight: 500;
   margin-bottom: 8px;
   line-height: 1.4;
@@ -340,8 +356,8 @@ const formatTime = (timestamp) => {
 .history-meta {
   display: flex;
   gap: 12px;
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 11px;
+  opacity: 0.5;
 }
 
 .languages {
@@ -355,30 +371,32 @@ const formatTime = (timestamp) => {
 }
 
 .action-btn {
-  background: white;
-  border: 1px solid #d1d5db;
+  background: var(--mac-btn-bg);
+  border: 1px solid var(--mac-toolbar-border);
   padding: 6px;
   border-radius: 4px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--mac-text);
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.8;
 }
 
 .action-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  color: #374151;
+  background: var(--mac-card);
+  border-color: var(--mac-accent);
+  color: var(--mac-accent);
+  opacity: 1;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 16px 24px 20px;
-  border-top: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  border-top: 1px solid var(--mac-border);
 }
 
 .footer-left {
@@ -392,53 +410,57 @@ const formatTime = (timestamp) => {
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--mac-btn-bg);
+  color: var(--mac-text);
+  border: 1px solid var(--mac-toolbar-border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
+  background: var(--mac-card);
+  border-color: var(--mac-border);
 }
 
 .btn-secondary:disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--mac-accent);
   color: white;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.2);
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .clear-btn.confirming {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: #ff3b30;
+  color: white;
+  border-color: #ff3b30;
 }
 
 .clear-btn.confirming:hover {
-  background: #fecaca;
+  opacity: 0.9;
 }
 
 .btn-tertiary {
-  background: #ffffff;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background: transparent;
+  color: var(--mac-text);
+  opacity: 0.6;
 }
 
 .btn-tertiary:hover {
-  background: #f9fafb;
+  opacity: 1;
 }
 
 .cancel-btn {
@@ -446,21 +468,14 @@ const formatTime = (timestamp) => {
 }
 
 .clear-confirm-hint {
-  font-size: 12px;
-  color: #b91c1c;
+  font-size: 11px;
+  color: #ff3b30;
 }
 
 @media (max-width: 768px) {
   .modal-content {
     width: 95%;
     max-height: 90vh;
-  }
-  
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding-left: 16px;
-    padding-right: 16px;
   }
   
   .history-item {
