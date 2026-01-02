@@ -33,7 +33,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/qyzhg/prism/releases/latest/download/latest.json"
+        "https://github.com/vesonchan/AI-Translate/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhGN0Y2RkFBRDU4NjcyN0IKUldSN2NvYlZxbTkvajh5TVBPK2lpN0Q0SWNyR2pUeE5WQi8vcHhENEtjQVJxSFI2TWduK09nT2cK"
     }
