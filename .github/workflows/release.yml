@@ -26,16 +26,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: "npm"
 
       - name: Install system dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -58,7 +53,7 @@ jobs:
             src-tauri
 
       - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build and upload release
         uses: tauri-apps/tauri-action@v0
@@ -69,11 +64,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_PUBLIC_KEY: ${{ secrets.TAURI_PUBLIC_KEY }}
         with:
-          tauriScript: pnpm tauri
+          tauriScript: npm run tauri
           releaseId: ${{ github.event_name == 'release' && github.event.release.id || '' }}
           tagName: ${{ github.event_name == 'release' && github.event.release.tag_name || 'v__VERSION__' }}
           releaseName: ${{ github.event_name == 'release' && github.event.release.name || 'prism v__VERSION__' }}
-          releaseBody: ${{ github.event_name == 'release' && github.event.release.body || '自动构建的 Prism 桌面版本。' }}
+          releaseBody: ${{ github.event_name == 'release' && github.event.release.body || '自动构建的 AI-Translate 桌面版本。' }}
           releaseDraft: false
           prerelease: ${{ github.event_name == 'release' && github.event.release.prerelease || false }}
           uploadUpdaterJson: true
